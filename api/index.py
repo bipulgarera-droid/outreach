@@ -346,8 +346,8 @@ def update_template(template_id):
 def generate_template():
     """Use AI to write an email template subject and body."""
     try:
-        if not PERPLEXITY_API_KEY:
-            return jsonify({'error': 'Perplexity API key missing'}), 400
+        if not GEMINI_API_KEY:
+            return jsonify({'error': 'Gemini API key missing'}), 400
             
         data = request.json
         prompt = data.get('prompt')
@@ -360,27 +360,17 @@ def generate_template():
         Keep the email concise and natural.
         CRITICAL INSTRUCTIONS:
         1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
-        2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed."""
+        2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
+        3. ALWAYS return your entire response as a single, valid JSON block."""
         
-        headers = {
-            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=system + "\n\nUser Prompt:\n" + prompt,
+        )
         
-        payload = {
-            "model": "sonar-pro",
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt}
-            ],
-            "response_format": {"type": "json_object"}
-        }
-        
-        response = requests.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()
-        
-        content = response.json()['choices'][0]['message']['content']
-        # Extract JSON (Perplexity may wrap in markdown blocks)
+        content = response.text.strip()
+        # Extract JSON (Gemini may wrap in markdown blocks)
         if '```json' in content:
             content = content.split('```json')[1].split('```')[0].strip()
         elif '```' in content:

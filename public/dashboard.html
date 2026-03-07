@@ -959,7 +959,7 @@
         }
 
         async function generateTemplateAI(id, stepNumber) {
-            const userPrompt = window.prompt('What should this email step be about? (e.g. "A polite follow-up asking if they watched the trailer")\\n\\nNote: Generating uses the Perplexity API.');
+            const userPrompt = window.prompt('What should this email step be about? (e.g. "A polite follow-up asking if they watched the trailer")\\n\\nNote: Generating uses the Gemini API.');
             if (!userPrompt) return;
 
             showToast('🪄 AI is writing the template...');
