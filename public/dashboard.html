@@ -721,7 +721,7 @@
                                                     </thead>
                                                     <tbody class="divide-y divide-gray-800/50">
                                                         ${g.steps.map(s => `
-                                                            <tr class="hover:bg-gray-800/20 cursor-pointer" onclick="editSequenceStep(${s.id})" title="Click to edit email text">
+                                                            <tr class="hover:bg-gray-800/20 cursor-pointer" onclick="editSequenceStep('${s.id}')" title="Click to edit email text">
                                                                 <td class="py-2 text-gray-400">Step ${s.step_number}</td>
                                                                 <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4">${s.subject}</td>
                                                                 <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}</span></td>
@@ -1057,7 +1057,7 @@
                         </div>
                     </div>
                     <div class="mt-6 flex gap-3">
-                        <button onclick="saveSequenceStep(${id})" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 rounded-lg">Save Changes</button>
+                        <button onclick="saveSequenceStep('${id}')" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 rounded-lg">Save Changes</button>
                         <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg">Cancel</button>
                     </div>
                 </div>
