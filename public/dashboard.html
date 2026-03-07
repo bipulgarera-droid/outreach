@@ -592,7 +592,7 @@
                                     <td class="px-4 py-3 text-gray-400 max-w-[200px] truncate" title="${(c.bio || '').replace(/"/g, '&quot;')}">${c.bio || '—'}</td>
                                     <td class="px-4 py-3 text-gray-300">${c.email || '<span class="text-gray-600">—</span>'}</td>
                                     <td class="px-4 py-3">${c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" class="text-blue-400 hover:text-blue-300"><i data-lucide="linkedin" class="w-4 h-4 inline"></i></a>` : '<span class="text-gray-600">—</span>'}</td>
-                                    <td class="px-4 py-3 text-pink-400">${c.instagram || '<span class="text-gray-600">—</span>'}</td>
+                                    <td class="px-4 py-3 text-pink-400">${c.instagram ? `<a href="https://instagram.com/${c.instagram.replace('@', '')}" target="_blank" class="hover:underline hover:text-pink-300">${c.instagram}</a>` : '<span class="text-gray-600">—</span>'}</td>
                                     <td class="px-4 py-3"><span class="status-${c.status} text-xs px-2 py-1 rounded-full">${c.status}</span></td>
                                     <td class="px-4 py-3 text-right">
                                         <button onclick="showContactDetail('${c.id}')" class="text-gray-400 hover:text-white mr-2">
@@ -1116,7 +1116,7 @@
                         ${field('Bio', c.bio)}
                         ${field('Email', c.email)}
                         ${field('LinkedIn', c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" class="text-blue-400 hover:underline">${c.linkedin_url}</a>` : '—')}
-                        ${field('Instagram', c.instagram)}
+                        ${field('Instagram', c.instagram ? `<a href="https://instagram.com/${c.instagram.replace('@', '')}" target="_blank" class="text-pink-400 hover:underline hover:text-pink-300">${c.instagram}</a>` : '—')}
                         ${field('Source', c.source)}
                         ${c.icebreaker ? `<div><label class="text-xs text-gray-400 block mb-1">Icebreaker</label><div class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 italic">"${c.icebreaker}"</div></div>` : ''}
                     </div>
