@@ -55,9 +55,10 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None) -> str | 
     if linkedin_url:
         context += f"\nLinkedIn: {linkedin_url}"
     
-    prompt = f"""Generate a 2-sentence personalized icebreaker for cold emailing this person about an indie film.
-The first sentence should reference something specific about their work or background.
-The second sentence should naturally bridge to why you're reaching out about your film.
+    prompt = f"""Generate a 2-sentence personalized icebreaker for cold emailing this person.
+The first sentence MUST reference something specific about their CURRENT job, current company, or most recent publicly shared achievement. 
+CRITICAL: Do NOT hallucinate or confuse their current job with past roles. Stick strictly to their present situation.
+The second sentence should naturally bridge into why you're reaching out to them.
 
 Keep it warm, genuine, and NOT salesy. No generic flattery.
 CRITICAL INSTRUCTIONS:
@@ -78,7 +79,7 @@ Reply with ONLY the 2-sentence icebreaker, nothing else."""
         'messages': [
             {
                 'role': 'system',
-                'content': 'You are a film publicist writing personalized outreach emails. Be specific, warm, and concise.'
+                'content': 'You are an elite B2B and cold-email publicist writing personalized outreach emails. Be specific, accurate about their current role, warm, and concise.'
             },
             {
                 'role': 'user',
