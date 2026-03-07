@@ -646,30 +646,95 @@
                 </button>
             `;
 
+            // Group sequences by contact
+            const grouped = {};
+            sequences.forEach(s => {
+                const cid = s.contact_id;
+                if (!grouped[cid]) {
+                    grouped[cid] = {
+                        contact: s.film_contacts,
+                        steps: []
+                    };
+                }
+                grouped[cid].steps.push(s);
+            });
+
+            // Sort steps within each contact by step_number
+            Object.values(grouped).forEach(g => {
+                g.steps.sort((a, b) => a.step_number - b.step_number);
+            });
+
+            const contactIds = Object.keys(grouped);
+
             area.innerHTML = `
                 <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                     <table class="w-full">
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
+                                <th class="px-4 py-3 text-left font-medium w-8"></th>
                                 <th class="px-4 py-3 text-left font-medium">Contact</th>
-                                <th class="px-4 py-3 text-left font-medium">Step</th>
-                                <th class="px-4 py-3 text-left font-medium">Subject</th>
-                                <th class="px-4 py-3 text-left font-medium">Status</th>
-                                <th class="px-4 py-3 text-left font-medium">Scheduled</th>
-                                <th class="px-4 py-3 text-left font-medium">Sent</th>
+                                <th class="px-4 py-3 text-left font-medium">Email</th>
+                                <th class="px-4 py-3 text-left font-medium">Progress</th>
+                                <th class="px-4 py-3 text-left font-medium">Next Step</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-800 text-sm">
-                            ${sequences.length ? sequences.map(s => `
-                                <tr class="hover:bg-gray-800/30">
-                                    <td class="px-4 py-3 font-medium text-white">${s.film_contacts?.name || '—'}</td>
-                                    <td class="px-4 py-3 text-gray-400">Step ${s.step_number}</td>
-                                    <td class="px-4 py-3 text-gray-300 max-w-[250px] truncate">${s.subject}</td>
-                                    <td class="px-4 py-3"><span class="status-${s.status} text-xs px-2 py-1 rounded-full">${s.status}</span></td>
-                                    <td class="px-4 py-3 text-gray-500 text-xs">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
-                                    <td class="px-4 py-3 text-gray-500 text-xs">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
-                                </tr>
-                            `).join('') : '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-500">No sequences yet. Select contacts and create sequences from the Contacts tab.</td></tr>'}
+                            ${contactIds.length ? contactIds.map(cid => {
+                const g = grouped[cid];
+                const totalSteps = g.steps.length;
+                const sentSteps = g.steps.filter(s => s.status === 'sent').length;
+                const pendingSteps = g.steps.filter(s => s.status === 'pending');
+                const nextStep = pendingSteps.length ? pendingSteps[0] : null;
+
+                return `
+                                    <!-- Main Contact Row -->
+                                    <tr class="hover:bg-gray-800/30 cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')">
+                                        <td class="px-4 py-3 text-gray-500"><i data-lucide="chevron-down" class="w-4 h-4"></i></td>
+                                        <td class="px-4 py-3 font-medium text-white">${g.contact?.name || '—'}</td>
+                                        <td class="px-4 py-3 text-gray-400">${g.contact?.email || '—'}</td>
+                                        <td class="px-4 py-3 text-gray-400">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                                    <div class="bg-violet-500 h-full" style="width: ${(sentSteps / totalSteps) * 100}%"></div>
+                                                </div>
+                                                <span class="text-xs">${sentSteps}/${totalSteps}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-500 text-xs">
+                                            ${nextStep ? `Step ${nextStep.step_number} on ${new Date(nextStep.scheduled_at).toLocaleDateString()}` : 'Completed'}
+                                        </td>
+                                    </tr>
+                                    <!-- Expandable Steps Row -->
+                                    <tr id="seq-${cid}" class="hidden bg-gray-900/30">
+                                        <td colspan="5" class="p-0 border-t border-gray-800">
+                                            <div class="p-4 pl-12">
+                                                <table class="w-full text-xs">
+                                                    <thead>
+                                                        <tr class="text-gray-500 border-b border-gray-800/50">
+                                                            <th class="pb-2 text-left font-medium w-16">Step</th>
+                                                            <th class="pb-2 text-left font-medium">Subject</th>
+                                                            <th class="pb-2 text-left font-medium w-24">Status</th>
+                                                            <th class="pb-2 text-left font-medium w-32">Scheduled</th>
+                                                            <th class="pb-2 text-left font-medium w-32">Sent</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-gray-800/50">
+                                                        ${g.steps.map(s => `
+                                                            <tr class="hover:bg-gray-800/20">
+                                                                <td class="py-2 text-gray-400">${s.step_number}</td>
+                                                                <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4" title="${s.subject}">${s.subject}</td>
+                                                                <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}</span></td>
+                                                                <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
+                                                                <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+            }).join('') : '<tr><td colspan="5" class="px-4 py-12 text-center text-gray-500">No sequences yet. Select contacts and create sequences from the Contacts tab.</td></tr>'}
                         </tbody>
                     </table>
                 </div>
@@ -817,9 +882,9 @@
                     <div class="flex flex-col items-center justify-center h-64 text-center">
                         <i data-lucide="file-text" class="w-12 h-12 text-gray-600 mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">No Templates Yet</h3>
-                        <p class="text-gray-400 mb-4">Seed the 12-step drip sequence templates to get started.</p>
+                        <p class="text-gray-400 mb-4">Seed the 7-step drip sequence templates to get started.</p>
                         <button onclick="seedTemplates()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                            Seed 12-Step Templates
+                            Seed Default Templates
                         </button>
                     </div>
                 `;
@@ -828,27 +893,88 @@
 
             area.innerHTML = `
                 <div class="mb-4 flex items-center justify-between">
-                    <p class="text-xs text-gray-400">${templates.length} email templates in drip sequence</p>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Sequence Builder</h3>
+                        <p class="text-xs text-gray-400">Available variables: <code class="text-violet-400 bg-gray-800 px-1 rounded">{{name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{first_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{icebreaker}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{bio}}</code></p>
+                    </div>
                 </div>
-                <div class="space-y-3">
+                <div class="space-y-4">
                     ${templates.map(t => `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-2">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5" id="template-${t.id}">
+                            <div class="flex items-center justify-between mb-4">
                                 <div class="flex items-center gap-3">
                                     <span class="bg-violet-500/20 text-violet-400 text-xs font-bold px-2.5 py-1 rounded-lg">Step ${t.step_number}</span>
-                                    <h4 class="text-sm font-semibold text-white">${t.name}</h4>
+                                    <input type="text" id="t-name-${t.id}" value="${t.name.replace(/"/g, '&quot;')}" class="bg-transparent border-b border-dashed border-gray-600 text-white font-semibold focus:outline-none focus:border-violet-500">
                                 </div>
-                                <span class="text-xs text-gray-500">Delay: ${t.delay_days} days</span>
+                                <div class="flex items-center gap-4 text-sm">
+                                    <label class="text-gray-400 flex items-center gap-2">
+                                        Delay (Days): <input type="number" id="t-delay-${t.id}" value="${t.delay_days}" class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-violet-500">
+                                    </label>
+                                    <button onclick="generateTemplateAI(${t.id}, ${t.step_number})" class="text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><i data-lucide="sparkles" class="w-4 h-4"></i> AI Gen</button>
+                                    <button onclick="saveTemplate(${t.id})" class="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"><i data-lucide="save" class="w-4 h-4"></i> Save</button>
+                                </div>
                             </div>
-                            <p class="text-xs text-gray-400 mb-1"><strong>Subject:</strong> ${t.subject_template}</p>
-                            <details class="text-xs text-gray-500 mt-2">
-                                <summary class="cursor-pointer hover:text-gray-300">View body template</summary>
-                                <div class="mt-2 bg-gray-800 rounded-lg p-3 text-gray-300">${t.body_template}</div>
-                            </details>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">Subject</label>
+                                    <input type="text" id="t-subject-${t.id}" value="${t.subject_template.replace(/"/g, '&quot;')}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">Body HTML</label>
+                                    <textarea id="t-body-${t.id}" rows="6" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-violet-500">${t.body_template}</textarea>
+                                </div>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             `;
+            // Call createIcons to render the newly injected lucide icons
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, 50);
+        }
+
+        async function saveTemplate(id) {
+            const name = document.getElementById(`t-name-${id}`).value;
+            const delay_days = parseInt(document.getElementById(`t-delay-${id}`).value, 10);
+            const subject_template = document.getElementById(`t-subject-${id}`).value;
+            const body_template = document.getElementById(`t-body-${id}`).value;
+
+            showToast('Saving template...');
+            try {
+                const res = await apiFetch(`/api/templates/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, delay_days, subject_template, body_template })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                showToast('✅ Template saved');
+            } catch (e) {
+                showToast('❌ Error saving: ' + e.message);
+            }
+        }
+
+        async function generateTemplateAI(id, stepNumber) {
+            const prompt = prompt('What should this email step be about? (e.g. "A polite follow-up asking if they watched the trailer")\\n\\nNote: Generating uses the Perplexity API.');
+            if (!prompt) return;
+
+            showToast('🪄 AI is writing the template...');
+            try {
+                const res = await apiFetch('/api/templates/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt + " This is step " + stepNumber + " in the sequence." })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById(`t-subject-${id}`).value = data.subject_template;
+                document.getElementById(`t-body-${id}`).value = data.body_template;
+                showToast('✅ AI generation complete. Remember to Save!');
+            } catch (e) {
+                showToast('❌ Generation error: ' + e.message);
+            }
         }
 
         // =========================================================================
@@ -1030,36 +1156,18 @@
         }
 
         async function createSequencesForSelected() {
-            // First, ask user to go to contacts tab and select
             const ids = getSelectedContactIds();
-            if (!ids.length) {
-                // Try getting all icebreaker_ready contacts
-                const res = await apiFetch('/api/contacts?status=icebreaker_ready&limit=100');
-                const data = await res.json();
-                const contacts = data.contacts || [];
-                if (!contacts.length) return alert('No contacts ready for sequences. Enrich and generate icebreakers first.');
-                if (!confirm(`Create 12-email sequences for ${contacts.length} icebreaker-ready contacts?`)) return;
+            if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
+            if (!confirm(`Create sequence for ${ids.length} selected contacts?`)) return;
 
-                showToast('Creating sequences...');
-                try {
-                    const createRes = await apiFetch('/api/sequences/create', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contact_ids: contacts.map(c => c.id) })
-                    });
-                    const result = await createRes.json();
-                    showToast(`✅ Created ${result.created} email sequences for ${result.contacts} contacts`);
-                    loadContent();
-                } catch (e) { showToast('❌ ' + e.message); }
-                return;
-            }
-
-            showToast('Creating sequences for selected...');
+            showToast('Creating sequences for selected contacts...');
             try {
                 const res = await apiFetch('/api/sequences/create', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contact_ids: ids })
                 });
                 const data = await res.json();
+                if (data.error) throw new Error(data.error);
                 showToast(`✅ Created ${data.created} sequences`);
                 loadContent();
             } catch (e) { showToast('❌ ' + e.message); }

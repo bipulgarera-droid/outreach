@@ -337,6 +337,59 @@ def update_template(template_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/templates/generate', methods=['POST'])
+def generate_template():
+    """Use AI to write an email template subject and body."""
+    try:
+        if not PERPLEXITY_API_KEY:
+            return jsonify({'error': 'Perplexity API key missing'}), 400
+            
+        data = request.json
+        prompt = data.get('prompt')
+        if not prompt:
+            return jsonify({'error': 'Prompt is required'}), 400
+            
+        system = """You are an expert cold email copywriter. Write a single sequence step based on the prompt.
+        Return ONLY valid JSON with 'subject' and 'body' keys.
+        You may use these variables in curly braces: {{name}}, {{first_name}}, {{icebreaker}}, {{bio}}.
+        Keep the email concise and natural."""
+        
+        headers = {
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "sonar-pro",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"}
+        }
+        
+        response = requests.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+        
+        content = response.json()['choices'][0]['message']['content']
+        # Extract JSON (Perplexity may wrap in markdown blocks)
+        if '```json' in content:
+            content = content.split('```json')[1].split('```')[0].strip()
+        elif '```' in content:
+            content = content.split('```')[1].split('```')[0].strip()
+            
+        import json
+        result = json.loads(content)
+        
+        return jsonify({
+            'subject_template': result.get('subject', 'Missing Subject'),
+            'body_template': result.get('body', 'Missing Body')
+        })
+    except Exception as e:
+        logger.error(f"Template generation error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # ROUTES — Email Sequences
 # =============================================================================
@@ -522,41 +575,6 @@ def seed_templates():
                 'body_template': '<p>Hi {{first_name}},</p><p>I know your time is valuable, so I\'ll be direct — would you be open to watching and reviewing our film?</p><p>I can provide:</p><ul><li>🎥 Private screener link (your eyes only)</li><li>📋 Press notes and director Q&A</li><li>📸 Exclusive stills for your publication</li></ul><p>Your honest perspective would mean the world to our team. No obligation to write positively — we value authentic criticism.</p><p>Just say the word and I\'ll send the screener right over.</p><p>Respectfully yours,<br>[Your Name]</p>',
                 'delay_days': 18
             },
-            {
-                'step_number': 8,
-                'name': 'Exclusive Clip',
-                'subject_template': 'An exclusive clip — just for you',
-                'body_template': '<p>Hi {{first_name}},</p><p>I have something special — an exclusive clip from the film that hasn\'t been released publicly yet.</p><p>🎬 <a href="[CLIP_URL]">Watch the exclusive clip</a></p><p>This scene captures the heart of the film. I chose to share it with you because I think it resonates with the storytelling you appreciate.</p><p>Feel free to share it on your platform with an exclusive tag if you\'d like!</p><p>Best,<br>[Your Name]</p>',
-                'delay_days': 22
-            },
-            {
-                'step_number': 9,
-                'name': 'Audience Reaction',
-                'subject_template': 'The audience is responding — here\'s what they\'re saying',
-                'body_template': '<p>Hi {{first_name}},</p><p>I wanted to share some early audience reactions to our film:</p><blockquote>"[Quote 1]" — Audience member</blockquote><blockquote>"[Quote 2]" — Festival attendee</blockquote><p>The film is generating real conversations about [theme]. I thought you\'d find the audience response interesting, especially given your coverage of [relevant topic].</p><p>Still happy to arrange a screener if you\'re interested.</p><p>Warmly,<br>[Your Name]</p>',
-                'delay_days': 26
-            },
-            {
-                'step_number': 10,
-                'name': 'Screening Invite',
-                'subject_template': 'Personal invitation — private screening',
-                'body_template': '<p>Hi {{first_name}},</p><p>I\'d like to personally invite you to a private screening of our film.</p><p>📅 Date: [DATE]<br>📍 Location: [LOCATION/VIRTUAL]<br>🕐 Time: [TIME]</p><p>There will be a Q&A session with the director afterwards. It\'s an intimate gathering of [X] people who we think would truly appreciate the film.</p><p>RSVP: [RSVP_LINK]</p><p>Hope to see you there,<br>[Your Name]</p>',
-                'delay_days': 30
-            },
-            {
-                'step_number': 11,
-                'name': 'Final Nudge',
-                'subject_template': 'Last thoughts before we go quiet',
-                'body_template': '<p>Hi {{first_name}},</p><p>I realize I\'ve sent a few messages and I want to be respectful of your inbox. This will be my second-to-last email.</p><p>If any of the following interest you, just reply with the number:</p><ol><li>Private screener link</li><li>Interview with the director</li><li>Press kit materials</li><li>Remove me from future emails</li></ol><p>No hard feelings either way. I genuinely appreciate your time.</p><p>With respect,<br>[Your Name]</p>',
-                'delay_days': 35
-            },
-            {
-                'step_number': 12,
-                'name': 'Thank You + Video Message',
-                'subject_template': 'A personal thank you (video inside)',
-                'body_template': '<p>Hi {{first_name}},</p><p>Whether or not we connected on this particular film, I wanted to send a genuine thank you for the work you do in championing storytelling.</p><p>🎥 <a href="[VIDEO_MESSAGE_URL]">A short personal video message for you</a></p><p>If our paths cross at a festival or screening in the future, I\'d love to say hello in person. And if you ever want to see what we\'re working on next, I\'m always just an email away.</p><p>With gratitude and admiration,<br>[Your Name]</p>',
-                'delay_days': 40
-            }
         ]
         
         # Check if templates already exist
