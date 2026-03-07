@@ -35,33 +35,39 @@ def extract_name_from_linkedin(title: str) -> str:
     Extract a person's name from a LinkedIn title.
     Handles profile pages and post pages.
     """
-    # Remove LinkedIn suffixes
-    name = re.sub(r"\s*('s)?\s*(Post|Article|Activity).*$", "", title, flags=re.IGNORECASE)
-    name = re.sub(r'\s*[\|\-–—]\s*LinkedIn.*$', '', name, flags=re.IGNORECASE)
-    # Remove common suffixes like titles
-    name = re.sub(r'\s*[\|\-–—]\s*(Film|Festival|Critic|Director|Programmer|Producer|Curator|Writer).*$', '', name, flags=re.IGNORECASE)
+    # Remove LinkedIn suffix first
+    name = re.sub(r'\s*[\|\-–—]\s*LinkedIn.*$', '', title, flags=re.IGNORECASE)
+    # Remove post/article markers
+    name = re.sub(r"\s*('s)?\s*(Post|Article|Activity|Likes).*$", "", name, flags=re.IGNORECASE)
+    # Remove role/title suffixes after dash/pipe (e.g. "John Doe - Film Programmer at XYZ")
+    name = re.sub(r'\s*[\|\-–—]\s*.+$', '', name)
+    # Remove degree/credential suffixes (e.g. "John Doe, PhD" or "John Doe MFA")
+    name = re.sub(r',\s*(PhD|MFA|MBA|MPA|MA|BA|BS|MS|Jr|Sr|III|II|IV).*$', '', name, flags=re.IGNORECASE)
     # Clean up
-    name = name.strip(' -|–—')
+    name = name.strip(' -|–—,."\'')
     
-    # If the title was something like "Job-Posting...", the name might be junk
-    if "Job" in name or "PDF" in name.upper() or "Call For" in name:
-        # Fall back to splitting by ' | ' or ' - ' to try to find a name
-        parts = title.split(' | ')
-        if len(parts) > 1:
-            name = parts[-1]
-        else:
-            parts = title.split(' - ')
-            if len(parts) > 1:
-                name = parts[-1]
+    # If the title was something like "Job posting" or "PDF", it's junk
+    junk_indicators = ['job', 'pdf', 'call for', 'submission', 'deadline', 'apply', 'hiring', 'vacancy']
+    if any(junk in name.lower() for junk in junk_indicators):
+        return ''
     
     name = name.strip()
     
-    # Validate: should be 1-5 words, no special chars
+    # Validate: should be 2-6 words, primarily alphabetic
     words = name.split()
-    if 1 <= len(words) <= 6:
-        return name
+    if 2 <= len(words) <= 6:
+        # Each word should be mostly alphabetic
+        alpha_words = [w for w in words if re.match(r'^[A-Za-z\'\-\.]+$', w)]
+        if len(alpha_words) >= 2:
+            return ' '.join(alpha_words)
     
-    return title.split(' - ')[0].split(' | ')[0].strip()
+    # Last resort: grab the first part before any delimiter
+    fallback = title.split(' - ')[0].split(' | ')[0].strip()
+    fallback_words = fallback.split()
+    if 2 <= len(fallback_words) <= 6:
+        return fallback
+    
+    return ''
 
 
 def extract_bio_from_snippet(snippet: str) -> str:
@@ -83,10 +89,11 @@ def extract_bio_from_snippet(snippet: str) -> str:
 
 
 def is_linkedin_profile(url: str) -> bool:
-    """Check if URL is a LinkedIn profile (not company/post). Handles country paths like uk.linkedin.com."""
+    """Check if URL is a LinkedIn personal profile (/in/username). Rejects company, pulse, and post pages."""
     if not url:
         return False
-    return bool(re.search(r'linkedin\.com/.*in/', url))
+    # Must be linkedin.com/in/some-username (with optional trailing slash/query)
+    return bool(re.search(r'linkedin\.com/in/[a-zA-Z0-9\-_%]+', url))
 
 
 def is_any_linkedin_url(url: str) -> bool:
@@ -103,12 +110,24 @@ def is_valid_contact(result: dict) -> bool:
     if not link:
         return False
     
-    # LinkedIn links are usually valid
+    # Reject obvious non-person pages
+    reject_patterns = ['job posting', 'careers', 'apply now', 'call for', 'submission',
+                       'deadline', 'vacancy', 'company page', '/company/', '/jobs/']
+    for pattern in reject_patterns:
+        if pattern in link.lower() or pattern in title:
+            return False
+    
+    # LinkedIn /in/ profiles are highest quality
+    if is_linkedin_profile(link):
+        return True
+    
+    # Other LinkedIn links (posts, pulse articles) — accept but they may have weaker data
     if is_any_linkedin_url(link):
         return True
     
     # For non-LinkedIn results, look for person indicators
-    person_indicators = ['critic', 'director', 'programmer', 'curator', 'festival', 'film', 'review']
+    person_indicators = ['critic', 'director', 'programmer', 'curator', 'festival',
+                         'film', 'review', 'ceo', 'founder', 'producer', 'journalist']
     return any(ind in title for ind in person_indicators)
 
 
@@ -142,12 +161,21 @@ def parse_search_results(results: list[dict], source_query: str = '') -> list[di
         title = result.get('title', '')
         snippet = result.get('snippet', '')
         
-        if is_any_linkedin_url(link):
+        if is_linkedin_profile(link):
+            # Best case: this is a /in/ profile page
             name = extract_name_from_linkedin(title)
             linkedin_url = link
+        elif is_any_linkedin_url(link):
+            # It's a LinkedIn post/article — still try to extract name
+            name = extract_name_from_linkedin(title)
+            linkedin_url = None  # Don't store non-profile URLs as the profile link
         else:
             name = title.split(' - ')[0].split(' | ')[0].strip()
             linkedin_url = None
+        
+        # Skip if we couldn't extract a valid name
+        if not name or len(name) < 3:
+            continue
         
         # Deduplicate by name (case-insensitive)
         name_lower = name.lower().strip()

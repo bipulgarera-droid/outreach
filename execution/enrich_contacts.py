@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Enrich Contacts — Find emails and Instagram handles via Serper/Hunter.
+Enrich Contacts — Find emails and Instagram handles via Serper Google Search.
 
 Reads contacts with status='new' from Supabase,
-enriches with email (Hunter.io or Serper fallback) and Instagram.
+enriches with email and Instagram using smart Google queries.
 
 Usage:
     python -m execution.enrich_contacts --limit 50
@@ -31,73 +31,122 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 SERPER_API_KEY = os.getenv('SERPER_API_KEY')
-HUNTER_API_KEY = os.getenv('HUNTER_API_KEY')
 SERPER_URL = 'https://google.serper.dev/search'
 
+# Common role keywords to help Google narrow results
+ROLE_KEYWORDS_MAP = {
+    'programmer': 'festival programmer',
+    'curator': 'festival curator',
+    'director': 'festival director',
+    'producer': 'producer',
+    'critic': 'film critic',
+    'writer': 'writer',
+    'journalist': 'journalist',
+    'ceo': 'ceo',
+    'founder': 'founder',
+    'marketing': 'marketing',
+    'manager': 'manager',
+}
 
-def find_email_hunter(name: str, domain: str = None) -> str | None:
-    """Find email via Hunter.io email finder API."""
-    if not HUNTER_API_KEY:
-        return None
+
+def guess_role_keyword(contact: dict) -> str:
+    """
+    Try to extract a role keyword from the contact's bio or source query.
+    This helps narrow down Serper searches (e.g. 'John Doe festival programmer email').
+    """
+    bio = (contact.get('bio') or '').lower()
+    source = (contact.get('source') or '').lower()
+    combined = f"{bio} {source}"
     
-    try:
-        parts = name.split()
-        if len(parts) < 2:
-            return None
-        
-        params = {
-            'api_key': HUNTER_API_KEY,
-            'first_name': parts[0],
-            'last_name': ' '.join(parts[1:]),
-        }
-        if domain:
-            params['domain'] = domain
-        
-        response = requests.get('https://api.hunter.io/v2/email-finder', params=params, timeout=15)
-        data = response.json()
-        
-        if data.get('data', {}).get('email'):
-            return data['data']['email']
-    except Exception as e:
-        logger.warning(f"Hunter.io error for {name}: {e}")
+    for keyword, role_phrase in ROLE_KEYWORDS_MAP.items():
+        if keyword in combined:
+            return role_phrase
     
-    return None
+    # Default fallback: just use empty string so search stays broad
+    return ''
 
 
-def find_email_serper(name: str) -> str | None:
-    """Find email by searching Google via Serper."""
+def find_emails_serper(name: str, role_keyword: str = '') -> list[str]:
+    """
+    Find email addresses by searching Google via Serper.
+    Uses unquoted name + role keyword + 'email' to get broad results.
+    Returns ALL valid emails found across the top 10 results.
+    """
     if not SERPER_API_KEY:
-        return None
+        return []
     
     try:
         headers = {
             'X-API-KEY': SERPER_API_KEY,
             'Content-Type': 'application/json'
         }
+        
+        # Build query: name (unquoted) + role keyword + email
+        query_parts = [name]
+        if role_keyword:
+            query_parts.append(role_keyword)
+        query_parts.append('email')
+        query = ' '.join(query_parts)
+        
         payload = {
-            'q': f'"{name}" email contact',
+            'q': query,
             'num': 10
         }
         
+        logger.info(f"  Email search query: {query}")
         response = requests.post(SERPER_URL, headers=headers, json=payload, timeout=15)
         data = response.json()
         
-        # Look for email patterns in results
+        found_emails = []
+        seen_emails = set()
+        
+        # Check AI snippet / knowledge graph first (Google's AI answer)
+        ai_snippet = data.get('answerBox', {}).get('snippet', '') or ''
+        ai_answer = data.get('answerBox', {}).get('answer', '') or ''
+        knowledge_desc = data.get('knowledgeGraph', {}).get('description', '') or ''
+        
+        for text_block in [ai_snippet, ai_answer, knowledge_desc]:
+            emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text_block)
+            for email in emails:
+                email_lower = email.lower()
+                if email_lower not in seen_emails and _is_valid_email(email_lower):
+                    found_emails.append(email)
+                    seen_emails.add(email_lower)
+        
+        # Scan organic results
         for result in data.get('organic', []):
             text = f"{result.get('title', '')} {result.get('snippet', '')}"
             emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text)
             for email in emails:
-                # Filter out generic/junk emails
-                if not any(skip in email.lower() for skip in ['example.com', 'email.com', 'noreply', 'support@', 'info@']):
-                    return email
+                email_lower = email.lower()
+                if email_lower not in seen_emails and _is_valid_email(email_lower):
+                    found_emails.append(email)
+                    seen_emails.add(email_lower)
+        
+        return found_emails
+        
     except Exception as e:
         logger.warning(f"Serper email search error for {name}: {e}")
     
-    return None
+    return []
 
 
-def find_instagram_serper(name: str) -> str | None:
-    """Find Instagram handle via Serper search."""
+def _is_valid_email(email: str) -> bool:
+    """Filter out junk/generic emails."""
+    skip_patterns = [
+        'example.com', 'email.com', 'noreply', 'support@', 'info@',
+        'admin@', 'webmaster@', 'no-reply', 'donotreply', 'test@',
+        'sentry.io', 'github.com', 'placeholder', 'domain.com',
+        'yourname@', 'name@', 'user@', 'sample'
+    ]
+    return not any(skip in email for skip in skip_patterns)
+
+
+def find_instagram_serper(name: str, role_keyword: str = '') -> str | None:
+    """
+    Find Instagram handle via Serper search.
+    Uses unquoted name + role keyword + site:instagram.com.
+    """
     if not SERPER_API_KEY:
         return None
     
@@ -106,11 +155,20 @@ def find_instagram_serper(name: str) -> str | None:
             'X-API-KEY': SERPER_API_KEY,
             'Content-Type': 'application/json'
         }
+        
+        # Build query: name (unquoted) + role keyword + site:instagram.com
+        query_parts = [name]
+        if role_keyword:
+            query_parts.append(role_keyword)
+        query_parts.append('site:instagram.com')
+        query = ' '.join(query_parts)
+        
         payload = {
-            'q': f'"{name}" site:instagram.com',
+            'q': query,
             'num': 5
         }
         
+        logger.info(f"  Instagram search query: {query}")
         response = requests.post(SERPER_URL, headers=headers, json=payload, timeout=15)
         data = response.json()
         
@@ -120,8 +178,8 @@ def find_instagram_serper(name: str) -> str | None:
             match = re.search(r'instagram\.com/([a-zA-Z0-9_.]+)', url)
             if match:
                 handle = match.group(1)
-                # Filter out generic pages
-                if handle.lower() not in ['p', 'explore', 'reel', 'stories', 'accounts', 'about']:
+                # Filter out generic Instagram pages
+                if handle.lower() not in ['p', 'explore', 'reel', 'reels', 'stories', 'accounts', 'about', 'tags', 'locations']:
                     return f"@{handle}"
     except Exception as e:
         logger.warning(f"Instagram search error for {name}: {e}")
@@ -131,34 +189,35 @@ def find_instagram_serper(name: str) -> str | None:
 
 def enrich_single_contact(contact: dict) -> dict:
     """
-    Enrich a single contact with email and Instagram.
+    Enrich a single contact with email(s) and Instagram.
     
     Returns:
         Dict of enriched fields to update
     """
     name = contact.get('name', '')
+    role_keyword = guess_role_keyword(contact)
+    
     updates = {
         'enrichment_data': {},
         'status': 'enriched',
         'updated_at': datetime.utcnow().isoformat()
     }
     
-    # 1. Find email: try Hunter first, then Serper
-    email = find_email_hunter(name)
-    if email:
-        updates['email'] = email
-        updates['enrichment_data']['email_source'] = 'hunter'
-    else:
-        email = find_email_serper(name)
-        if email:
-            updates['email'] = email
-            updates['enrichment_data']['email_source'] = 'serper'
+    # 1. Find emails via Serper (may return multiple)
+    emails = find_emails_serper(name, role_keyword)
+    if emails:
+        # Store the first email as primary, all candidates in enrichment_data
+        updates['email'] = emails[0]
+        updates['enrichment_data']['email_source'] = 'serper'
+        updates['enrichment_data']['email_candidates'] = emails
+        logger.info(f"  Found {len(emails)} email(s): {emails}")
     
-    # 2. Find Instagram
-    instagram = find_instagram_serper(name)
+    # 2. Find Instagram via Serper
+    instagram = find_instagram_serper(name, role_keyword)
     if instagram:
         updates['instagram'] = instagram
         updates['enrichment_data']['instagram_source'] = 'serper'
+        logger.info(f"  Found Instagram: {instagram}")
     
     updates['enrichment_data'] = json.dumps(updates['enrichment_data'])
     
@@ -211,7 +270,7 @@ def enrich_contacts(limit: int = 50, dry_run: bool = False) -> dict:
             
             stats['processed'] += 1
             
-            # Rate limiting: 1 second between contacts
+            # Rate limiting: 1 second between contacts (2 Serper calls per contact)
             time.sleep(1)
             
         except Exception as e:
