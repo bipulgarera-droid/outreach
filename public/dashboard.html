@@ -366,10 +366,17 @@
                             <label class="block text-sm font-medium text-gray-400 mb-1">Project Name (e.g. SaaS Founders, Local Dentists)</label>
                             <input type="text" id="newProjectName" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500" placeholder="My Outreach Campaign">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Project Description & Pitch</label>
+                            <p class="text-xs text-violet-400 mb-2">Gemini AI will use this to automatically craft your initial 12-step drip campaign templates.</p>
+                            <textarea id="newProjectDesc" rows="4" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500 resize-y" placeholder="e.g. We are ABC.com matching CEOs with SaaS tools. First step should be a quick intro, then case studies, and eventually a polite breakup..."></textarea>
+                        </div>
                     </div>
                     <div class="mt-6 flex gap-3">
                         <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors">Cancel</button>
-                        <button onclick="createProject()" class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium py-2 rounded-lg transition-colors shadow-lg">Create Project</button>
+                        <button onclick="createProject()" id="btnCreateProject" class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium py-2 rounded-lg transition-colors shadow-lg">
+                            <span id="createProjectText">Create & Generate</span>
+                        </button>
                     </div>
                 </div>
             `);
@@ -377,14 +384,20 @@
 
         async function createProject() {
             const name = document.getElementById('newProjectName').value.trim();
+            const desc = document.getElementById('newProjectDesc').value.trim();
+
             if (!name) return alert('Enter a project name');
+
+            const btnText = document.getElementById('createProjectText');
+            if (btnText) btnText.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i> Generating Templates...';
+            if (window.lucide) window.lucide.createIcons();
 
             try {
                 // Direct fetch since apiFetch injects project_id which we might not have yet
                 const res = await fetch('/api/projects', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
+                    body: JSON.stringify({ name, description: desc })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -395,9 +408,10 @@
                 closeModal();
                 await loadProjects();
                 await loadContent();
-                showToast('🚀 Project created! You have a fresh workspace.');
+                showToast('🚀 Project created + AI Templates Generatated! Check Templates tab.');
             } catch (e) {
                 alert('Error: ' + e.message);
+                if (btnText) btnText.innerText = 'Create & Generate';
             }
         }
 

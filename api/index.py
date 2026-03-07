@@ -93,11 +93,76 @@ def create_project():
     try:
         data = request.json
         name = data.get('name')
+        description = data.get('description', '')
         if not name:
             return jsonify({'error': 'Project name required'}), 400
-        result = supabase.table('projects').insert({'name': name, 'description': data.get('description', '')}).execute()
-        return jsonify({'project': result.data[0]})
+        
+        # 1. Create the project
+        result = supabase.table('projects').insert({
+            'name': name, 
+            'description': description
+        }).execute()
+        
+        project = result.data[0]
+        project_id = project['id']
+        
+        # 2. Context-Aware Template Generation using Gemini
+        if GEMINI_API_KEY and description:
+            try:
+                system = f"""You are an elite B2B and cold-email copywriter for a project named "{name}".
+                The project is described as: "{description}".
+                
+                Generate a full 12-step drip email sequence tailored to this exact business description.
+                Create exactly 12 steps. 
+                Keep the tone professional yet conversational.
+                You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 12 objects.
+                Each object MUST have three exact keys: 
+                - "name" (a short internal name for the string, e.g. "Intro", "Follow up 1")
+                - "subject_template" (the email subject line)
+                - "body_template" (the email body)
+                
+                You may use these placeholder variables in curly braces: {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}}, {{{{icebreaker}}}}.
+                The "delay_days" will be calculated automatically by the system, just focus on the content.
+                Ensure step 1 is a strong introduction. Steps 2-12 should be polite follow-ups, value adds, case studies, or break-up emails.
+                Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
+                
+                client = genai.Client(api_key=GEMINI_API_KEY)
+                response = client.models.generate_content(
+                    model='gemini-2.5-pro',
+                    contents=system,
+                )
+                
+                content = response.text.strip()
+                if '```json' in content: content = content.split('```json')[1].split('```')[0].strip()
+                elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
+                
+                import json
+                steps = json.loads(content)
+                
+                # Standard delay pattern for a 12 step campaign
+                delays = [0, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120]
+                
+                templates_to_insert = []
+                for i, step in enumerate(steps[:12]):
+                    templates_to_insert.append({
+                        'project_id': project_id,
+                        'name': step.get('name', f'Step {i+1}'),
+                        'step_number': i + 1,
+                        'subject_template': step.get('subject_template', f'Follow up {i}'),
+                        'body_template': step.get('body_template', 'Placeholder body'),
+                        'delay_days': delays[i] if i < len(delays) else 30
+                    })
+                
+                if templates_to_insert:
+                    supabase.table('email_templates').insert(templates_to_insert).execute()
+                    
+            except Exception as ai_e:
+                logger.error(f"Failed to generate context-templates: {ai_e}")
+                # We do not fail the project creation, just log the error and allow empty templates
+
+        return jsonify({'project': project})
     except Exception as e:
+        logger.error(f"Project creation error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
