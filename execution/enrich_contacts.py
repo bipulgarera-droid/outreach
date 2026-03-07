@@ -146,6 +146,7 @@ def find_instagram_serper(name: str, role_keyword: str = '') -> str | None:
     """
     Find Instagram handle via Serper search.
     Uses unquoted name + role keyword + site:instagram.com.
+    Extracts handle from ANY Instagram URL (profiles, posts, reels).
     """
     if not SERPER_API_KEY:
         return None
@@ -172,14 +173,20 @@ def find_instagram_serper(name: str, role_keyword: str = '') -> str | None:
         response = requests.post(SERPER_URL, headers=headers, json=payload, timeout=15)
         data = response.json()
         
+        # Generic IG pages that are NOT handles
+        skip_handles = {'explore', 'accounts', 'about', 'tags', 'locations', 'stories', 'directory'}
+        
         for result in data.get('organic', []):
             url = result.get('link', '')
-            # Extract IG handle from instagram.com/username
+            # Extract the first path segment from any instagram.com URL
+            # This works for profiles, posts, reels:
+            #   instagram.com/jakartafilmweek          -> jakartafilmweek
+            #   instagram.com/jakartafilmweek/p/ABC123 -> jakartafilmweek
+            #   instagram.com/shrutiparekh/reel/XYZ    -> shrutiparekh
             match = re.search(r'instagram\.com/([a-zA-Z0-9_.]+)', url)
             if match:
                 handle = match.group(1)
-                # Filter out generic Instagram pages
-                if handle.lower() not in ['p', 'explore', 'reel', 'reels', 'stories', 'accounts', 'about', 'tags', 'locations']:
+                if handle.lower() not in skip_handles:
                     return f"@{handle}"
     except Exception as e:
         logger.warning(f"Instagram search error for {name}: {e}")

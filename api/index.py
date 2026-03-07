@@ -512,13 +512,21 @@ def list_sequences():
 
 @app.route('/api/sequences/<int:sequence_id>', methods=['PUT'])
 def update_sequence(sequence_id):
-    """Update a specific sequence step (e.g. manual edit)."""
+    """Update a specific sequence step (e.g. manual edit, mark sent/replied)."""
     try:
         data = request.json
-        allowed = ['subject', 'body']
+        allowed = ['subject', 'body', 'status', 'sent_at']
         update_data = {k: v for k, v in data.items() if k in allowed}
         
         result = supabase.table('email_sequences').update(update_data).eq('id', sequence_id).execute()
+        
+        # If marked as replied, cascade: cancel all pending steps for this contact
+        if data.get('status') == 'replied' and result.data:
+            contact_id = result.data[0].get('contact_id')
+            if contact_id:
+                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
+                supabase.table('contacts').update({'status': 'replied', 'updated_at': datetime.utcnow().isoformat()}).eq('id', contact_id).execute()
+        
         return jsonify({'sequence': result.data[0] if result.data else None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

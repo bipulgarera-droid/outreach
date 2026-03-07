@@ -733,7 +733,7 @@
                                     </tr>
                                     <!-- Expandable Steps Row -->
                                     <tr id="seq-${cid}" class="hidden bg-gray-900/30">
-                                        <td colspan="5" class="p-0 border-t border-gray-800">
+                                        <td colspan="6" class="p-0 border-t border-gray-800">
                                             <div class="p-4 pl-12">
                                                 <table class="w-full text-xs">
                                                     <thead>
@@ -743,6 +743,7 @@
                                                             <th class="pb-2 text-left font-medium w-24">Status</th>
                                                             <th class="pb-2 text-left font-medium w-32">Scheduled</th>
                                                             <th class="pb-2 text-left font-medium w-32">Sent</th>
+                                                            <th class="pb-2 text-left font-medium w-40">Actions</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody class="divide-y divide-gray-800/50">
@@ -753,6 +754,14 @@
                                                                 <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}</span></td>
                                                                 <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
+                                                                <td class="py-2">
+                                                                    ${s.status === 'pending' ? `
+                                                                        <div class="flex gap-1">
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent')" class="text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded hover:bg-emerald-800/50 transition-colors" title="Mark as manually sent (IG/LinkedIn)">✓ Sent</button>
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-amber-900/50 text-amber-400 rounded hover:bg-amber-800/50 transition-colors" title="Mark as replied — cancels all future steps">↩ Replied</button>
+                                                                        </div>
+                                                                    ` : ''}
+                                                                </td>
                                                             </tr>
                                                         `).join('')}
                                                     </tbody>
@@ -1159,6 +1168,34 @@
             } finally {
                 btn.innerHTML = origHtml;
                 if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function markSequenceStatus(sequenceId, newStatus) {
+            if (newStatus === 'replied') {
+                if (!confirm('This will mark the contact as REPLIED and cancel ALL remaining pending steps for them. Continue?')) return;
+            }
+
+            try {
+                const body = { status: newStatus };
+                if (newStatus === 'sent') body.sent_at = new Date().toISOString();
+
+                const res = await fetch(`/api/sequences/${sequenceId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                if (newStatus === 'replied') {
+                    showToast('↩ Contact marked as replied. All future steps cancelled.');
+                } else {
+                    showToast('✓ Step marked as sent.');
+                }
+                loadContent(); // refresh
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
             }
         }
 
