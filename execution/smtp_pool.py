@@ -98,11 +98,14 @@ class SMTPPool:
             msg["To"] = to_addr
             msg["Subject"] = subject
             
-            # Create a simple plain text representation from HTML
-            body_plain = body_html.replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
+            # Plain text version: strip any HTML tags, keep newlines
+            body_plain = body_html.replace('<br>', '\n').replace('<br/>', '\n').replace('<p>', '').replace('</p>', '\n')
+            
+            # HTML version: convert plain newlines to <br> so they render
+            body_formatted = body_html.replace('\n', '<br>\n')
             
             msg.attach(MIMEText(body_plain, "plain"))
-            msg.attach(MIMEText(body_html, "html"))
+            msg.attach(MIMEText(body_formatted, "html"))
 
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
                 server.ehlo()
