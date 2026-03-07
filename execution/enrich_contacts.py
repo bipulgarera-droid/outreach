@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Enrich Contacts — Find emails and Instagram handles via Serper Google Search.
+Enrich Contacts — Find emails and Instagram handles via Apify LinkedIn + Serper Google Search.
 
-Reads contacts with status='new' from Supabase,
-enriches with email and Instagram using smart Google queries.
+Reads contacts from Supabase,
+enriches with LinkedIn profile data (via Apify), email, and Instagram.
 
 Usage:
     python -m execution.enrich_contacts --limit 50
@@ -25,6 +25,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from dotenv import load_dotenv
 from pathlib import Path
 
+try:
+    from apify_client import ApifyClient
+except ImportError:
+    ApifyClient = None
+
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
 
@@ -33,6 +38,8 @@ logger = logging.getLogger(__name__)
 
 SERPER_API_KEY = os.getenv('SERPER_API_KEY')
 SERPER_URL = 'https://google.serper.dev/search'
+APIFY_API_KEY = os.getenv('APIFY_API_KEY')
+APIFY_ACTOR = 'apimaestro/linkedin-profile-full-sections-scraper'
 
 # Common role keywords to help Google narrow results
 ROLE_KEYWORDS_MAP = {
@@ -65,6 +72,96 @@ def guess_role_keyword(contact: dict) -> str:
     
     # Default fallback: just use empty string so search stays broad
     return ''
+
+
+def extract_linkedin_slug(linkedin_url: str) -> Optional[str]:
+    """
+    Extract the username slug from a LinkedIn profile URL.
+    e.g. 'https://ca.linkedin.com/in/carolyn-mauricette-0438321' -> 'carolyn-mauricette-0438321'
+    Returns None if the URL is not a profile URL (e.g. posts, activity).
+    """
+    if not linkedin_url:
+        return None
+    # Match /in/some-slug pattern
+    match = re.search(r'linkedin\.com/in/([a-zA-Z0-9_-]+)', linkedin_url)
+    if match:
+        return match.group(1).rstrip('/')
+    return None
+
+
+def scrape_linkedin_apify(username_slug: str) -> dict:
+    """
+    Scrape a LinkedIn profile using apimaestro/linkedin-profile-full-sections-scraper.
+    
+    Returns a dict with:
+        - 'email': str or None
+        - 'headline': str or None
+        - 'current_company': str or None
+        - 'current_title': str or None
+        - 'about': str or None
+        - 'location': str or None
+        - 'raw': full response dict
+    """
+    result = {
+        'email': None, 'headline': None, 'current_company': None,
+        'current_title': None, 'about': None, 'location': None, 'raw': None
+    }
+    
+    if not APIFY_API_KEY or not ApifyClient:
+        logger.warning("  Apify not available (missing API key or apify-client package)")
+        return result
+    
+    try:
+        client = ApifyClient(APIFY_API_KEY)
+        run_input = {
+            "includeEmail": True,
+            "usernames": [username_slug]
+        }
+        
+        logger.info(f"  Apify: scraping LinkedIn profile '{username_slug}'...")
+        run = client.actor(APIFY_ACTOR).call(run_input=run_input, timeout_secs=120)
+        
+        items = list(client.dataset(run['defaultDatasetId']).iterate_items())
+        if not items:
+            logger.warning(f"  Apify: no data returned for '{username_slug}'")
+            return result
+        
+        item = items[0]
+        
+        # Check for errors
+        if item.get('message') and 'No profile found' in item.get('message', ''):
+            logger.warning(f"  Apify: profile not found for '{username_slug}'")
+            return result
+        
+        basic = item.get('basic_info', {})
+        result['raw'] = item
+        result['headline'] = basic.get('headline')
+        result['about'] = basic.get('about')
+        result['current_company'] = basic.get('current_company')
+        result['email'] = basic.get('email')  # may be None
+        
+        loc = basic.get('location', {})
+        if isinstance(loc, dict):
+            result['location'] = loc.get('full') or loc.get('city')
+        elif isinstance(loc, str):
+            result['location'] = loc
+        
+        # Extract current title from experience
+        experiences = item.get('experience', [])
+        for exp in experiences:
+            if exp.get('is_current'):
+                result['current_title'] = exp.get('title')
+                # If basic_info didn't have current_company, grab from experience
+                if not result['current_company']:
+                    result['current_company'] = exp.get('company')
+                break
+        
+        logger.info(f"  Apify: got profile data. Email={result['email']}, Company={result['current_company']}")
+        
+    except Exception as e:
+        logger.warning(f"  Apify scraping error for '{username_slug}': {e}")
+    
+    return result
 
 
 def extract_domain_serper(company_name: str) -> Optional[str]:
@@ -248,7 +345,12 @@ def find_instagram_serper(name: str, role_keyword: str = '') -> Optional[str]:
 
 def enrich_single_contact(contact: dict) -> dict:
     """
-    Enrich a single contact with email(s) and Instagram.
+    Enrich a single contact with LinkedIn profile data, email(s), and Instagram.
+    
+    Flow:
+        1. If contact has a LinkedIn URL → scrape via Apify (profile data + email attempt)
+        2. If no email from Apify → fall back to Serper dorks
+        3. Find Instagram via Serper
     
     Returns:
         Dict of enriched fields to update
@@ -256,6 +358,7 @@ def enrich_single_contact(contact: dict) -> dict:
     name = contact.get('name', '')
     role_keyword = guess_role_keyword(contact)
     company_name = contact.get('company') or contact.get('source') or ''
+    linkedin_url = contact.get('linkedin_url') or ''
     
     updates = {
         'enrichment_data': {},
@@ -263,7 +366,36 @@ def enrich_single_contact(contact: dict) -> dict:
         'updated_at': datetime.utcnow().isoformat()
     }
     
-    # 1. Extract domain
+    apify_email = None
+    
+    # ── Step 0: Apify LinkedIn Scrape ──────────────────────────────────────
+    slug = extract_linkedin_slug(linkedin_url)
+    if slug:
+        apify_data = scrape_linkedin_apify(slug)
+        
+        # Store profile data in enrichment_data
+        if apify_data.get('headline'):
+            updates['enrichment_data']['linkedin_headline'] = apify_data['headline']
+        if apify_data.get('current_company'):
+            updates['enrichment_data']['linkedin_company'] = apify_data['current_company']
+            # Use Apify's company for domain extraction if we don't have one
+            if not company_name:
+                company_name = apify_data['current_company']
+        if apify_data.get('current_title'):
+            updates['enrichment_data']['linkedin_title'] = apify_data['current_title']
+        if apify_data.get('about'):
+            updates['enrichment_data']['linkedin_about'] = apify_data['about']
+        if apify_data.get('location'):
+            updates['enrichment_data']['linkedin_location'] = apify_data['location']
+        
+        # Check if Apify found an email
+        if apify_data.get('email'):
+            apify_email = apify_data['email']
+            updates['email'] = apify_email
+            updates['enrichment_data']['email_source'] = 'apify_linkedin'
+            logger.info(f"  ✅ Apify found email: {apify_email}")
+    
+    # ── Step 1: Domain Extraction ──────────────────────────────────────────
     domain = None
     if company_name:
         domain = extract_domain_serper(company_name)
@@ -271,16 +403,16 @@ def enrich_single_contact(contact: dict) -> dict:
             updates['enrichment_data']['company_domain'] = domain
             logger.info(f"  Extracted domain: {domain}")
     
-    # 2. Find emails via Serper (runs broad + domain-specific queries)
-    emails = find_emails_serper(name, role_keyword, domain)
-    if emails:
-        # Store the first email as primary, all candidates in enrichment_data
-        updates['email'] = emails[0]
-        updates['enrichment_data']['email_source'] = 'serper_enhanced'
-        updates['enrichment_data']['email_candidates'] = emails
-        logger.info(f"  Found {len(emails)} email(s): {emails}")
+    # ── Step 2: Serper Email Fallback (only if Apify didn't find one) ─────
+    if not apify_email:
+        emails = find_emails_serper(name, role_keyword, domain)
+        if emails:
+            updates['email'] = emails[0]
+            updates['enrichment_data']['email_source'] = 'serper_enhanced'
+            updates['enrichment_data']['email_candidates'] = emails
+            logger.info(f"  Found {len(emails)} email(s) via Serper: {emails}")
     
-    # 2. Find Instagram via Serper
+    # ── Step 3: Instagram via Serper ───────────────────────────────────────
     instagram = find_instagram_serper(name, role_keyword)
     if instagram:
         updates['instagram'] = instagram
