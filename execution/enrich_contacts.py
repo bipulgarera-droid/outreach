@@ -453,6 +453,10 @@ def enrich_single_contact(contact: dict) -> dict:
     """
     Enrich a single contact with LinkedIn profile data, email(s), and Instagram.
     
+    IMPORTANT: This function follows "supplement only" logic — it will NOT
+    overwrite fields that already have values (e.g. from GrowthScout import).
+    It only fills in blanks.
+    
     Flow:
         1. If contact has a LinkedIn URL → scrape via Apify (profile data + email attempt)
         2. Extract company domain
@@ -468,8 +472,22 @@ def enrich_single_contact(contact: dict) -> dict:
     company_name = contact.get('company') or contact.get('source') or ''
     linkedin_url = contact.get('linkedin_url') or ''
     
+    # Check what data the contact ALREADY has (e.g. from GrowthScout)
+    existing_email = (contact.get('email') or '').strip()
+    existing_instagram = (contact.get('instagram') or '').strip()
+    
+    # Parse existing enrichment_data to merge into, not replace
+    existing_enrichment = contact.get('enrichment_data')
+    if isinstance(existing_enrichment, str):
+        try:
+            existing_enrichment = json.loads(existing_enrichment)
+        except Exception:
+            existing_enrichment = {}
+    elif not isinstance(existing_enrichment, dict):
+        existing_enrichment = {}
+    
     updates = {
-        'enrichment_data': {},
+        'enrichment_data': existing_enrichment.copy(),  # Start from existing, merge new
         'status': 'enriched',
         'updated_at': datetime.utcnow().isoformat()
     }
@@ -482,83 +500,88 @@ def enrich_single_contact(contact: dict) -> dict:
     if slug:
         apify_data = scrape_linkedin_apify(slug)
         
-        # Store profile data in enrichment_data
-        if apify_data.get('headline'):
+        # Store profile data in enrichment_data (always supplement these)
+        if apify_data.get('headline') and not updates['enrichment_data'].get('linkedin_headline'):
             updates['enrichment_data']['linkedin_headline'] = apify_data['headline']
         if apify_data.get('current_company'):
-            updates['enrichment_data']['linkedin_company'] = apify_data['current_company']
+            if not updates['enrichment_data'].get('linkedin_company'):
+                updates['enrichment_data']['linkedin_company'] = apify_data['current_company']
             if not company_name:
                 company_name = apify_data['current_company']
-        if apify_data.get('current_title'):
+        if apify_data.get('current_title') and not updates['enrichment_data'].get('linkedin_title'):
             updates['enrichment_data']['linkedin_title'] = apify_data['current_title']
-        if apify_data.get('about'):
+        if apify_data.get('about') and not updates['enrichment_data'].get('linkedin_about'):
             updates['enrichment_data']['linkedin_about'] = apify_data['about']
-        if apify_data.get('location'):
+        if apify_data.get('location') and not updates['enrichment_data'].get('linkedin_location'):
             updates['enrichment_data']['linkedin_location'] = apify_data['location']
         
         if apify_data.get('email'):
             all_candidates.append((apify_data['email'], 'apify_linkedin'))
     
     # ── Step 1: Domain Extraction ──────────────────────────────────────────
-    domain = None
-    if company_name:
+    domain = updates['enrichment_data'].get('company_domain')  # Reuse existing if available
+    if not domain and company_name:
         domain = extract_domain_serper(company_name)
         if domain:
             updates['enrichment_data']['company_domain'] = domain
             logger.info(f"  Extracted domain: {domain}")
     
-    # ── Step 2: Serper Email Dorks (always runs) ──────────────────────────
-    serper_emails = find_emails_serper(name, role_keyword, domain)
-    for em in serper_emails:
-        all_candidates.append((em, 'serper'))
-    
-    # ── Step 2.5: Apify Contact Page Scraper (always runs if we have a domain)
-    if domain:
-        page_emails = scrape_contact_page_apify(domain)
-        for em in page_emails:
-            all_candidates.append((em, 'apify_contact_page'))
-    
-    # ── Confidence Scoring: pick the best email ───────────────────────────
-    if all_candidates:
-        # Deduplicate while preserving best source
-        seen = {}
-        for em, src in all_candidates:
-            em_lower = em.lower()
-            if em_lower not in seen:
-                seen[em_lower] = (em, src)
-            else:
-                # Keep the one from the more reliable source
-                existing_src = seen[em_lower][1]
-                source_rank = {'apify_linkedin': 3, 'apify_contact_page': 2, 'serper': 1}
-                if source_rank.get(src, 0) > source_rank.get(existing_src, 0):
+    # ── Only search for email if contact doesn't already have one ─────────
+    if not existing_email:
+        # ── Step 2: Serper Email Dorks ────────────────────────────────────
+        serper_emails = find_emails_serper(name, role_keyword, domain)
+        for em in serper_emails:
+            all_candidates.append((em, 'serper'))
+        
+        # ── Step 2.5: Apify Contact Page Scraper ─────────────────────────
+        if domain:
+            page_emails = scrape_contact_page_apify(domain)
+            for em in page_emails:
+                all_candidates.append((em, 'apify_contact_page'))
+        
+        # ── Confidence Scoring: pick the best email ──────────────────────
+        if all_candidates:
+            # Deduplicate while preserving best source
+            seen = {}
+            for em, src in all_candidates:
+                em_lower = em.lower()
+                if em_lower not in seen:
                     seen[em_lower] = (em, src)
-        
-        # Score all unique candidates
-        scored = []
-        for em_lower, (em, src) in seen.items():
-            score = _score_email(em, name, domain, src)
-            scored.append((score, em, src))
-            logger.info(f"    Email candidate: {em} (source={src}, score={score})")
-        
-        # Sort by score descending
-        scored.sort(key=lambda x: x[0], reverse=True)
-        
-        best_score, best_email, best_source = scored[0]
-        updates['email'] = best_email
-        updates['enrichment_data']['email_source'] = best_source
-        updates['enrichment_data']['email_confidence'] = best_score
-        updates['enrichment_data']['email_candidates'] = [
-            {'email': em, 'source': src, 'confidence': sc}
-            for sc, em, src in scored
-        ]
-        logger.info(f"  ✅ Best email: {best_email} (source={best_source}, confidence={best_score})")
+                else:
+                    existing_src = seen[em_lower][1]
+                    source_rank = {'apify_linkedin': 3, 'apify_contact_page': 2, 'serper': 1}
+                    if source_rank.get(src, 0) > source_rank.get(existing_src, 0):
+                        seen[em_lower] = (em, src)
+            
+            scored = []
+            for em_lower, (em, src) in seen.items():
+                score = _score_email(em, name, domain, src)
+                scored.append((score, em, src))
+                logger.info(f"    Email candidate: {em} (source={src}, score={score})")
+            
+            scored.sort(key=lambda x: x[0], reverse=True)
+            
+            best_score, best_email, best_source = scored[0]
+            updates['email'] = best_email
+            updates['enrichment_data']['email_source'] = best_source
+            updates['enrichment_data']['email_confidence'] = best_score
+            updates['enrichment_data']['email_candidates'] = [
+                {'email': em, 'source': src, 'confidence': sc}
+                for sc, em, src in scored
+            ]
+            logger.info(f"  ✅ Best email: {best_email} (source={best_source}, confidence={best_score})")
+    else:
+        logger.info(f"  ⏭️  Skipping email search — contact already has email: {existing_email}")
     
-    # ── Step 3: Instagram via Serper ───────────────────────────────────────
-    instagram = find_instagram_serper(name, role_keyword)
-    if instagram:
-        updates['instagram'] = instagram
-        updates['enrichment_data']['instagram_source'] = 'serper'
-        logger.info(f"  Found Instagram: {instagram}")
+    # ── Only search for Instagram if contact doesn't already have one ─────
+    if not existing_instagram:
+        instagram = find_instagram_serper(name, role_keyword)
+        if instagram:
+            updates['instagram'] = instagram
+            updates['enrichment_data']['instagram_source'] = 'serper'
+            logger.info(f"  Found Instagram: {instagram}")
+    else:
+        logger.info(f"  ⏭️  Skipping Instagram search — contact already has: {existing_instagram}")
     
     updates['enrichment_data'] = json.dumps(updates['enrichment_data'])
     
