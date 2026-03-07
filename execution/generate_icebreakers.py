@@ -60,6 +60,9 @@ The first sentence should reference something specific about their work or backg
 The second sentence should naturally bridge to why you're reaching out about your film.
 
 Keep it warm, genuine, and NOT salesy. No generic flattery.
+CRITICAL INSTRUCTIONS:
+1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
+2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
 
 {context}
 

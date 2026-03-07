@@ -353,7 +353,10 @@ def generate_template():
         system = """You are an expert cold email copywriter. Write a single sequence step based on the prompt.
         Return ONLY valid JSON with 'subject' and 'body' keys.
         You may use these variables in curly braces: {{name}}, {{first_name}}, {{icebreaker}}, {{bio}}.
-        Keep the email concise and natural."""
+        Keep the email concise and natural.
+        CRITICAL INSTRUCTIONS:
+        1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
+        2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed."""
         
         headers = {
             "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
@@ -461,6 +464,45 @@ def update_sequence(sequence_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def paraphrase_text(text: str) -> str:
+    """Use Perplexity to paraphrase a text while preserving variables."""
+    if not PERPLEXITY_API_KEY:
+        return text
+    try:
+        system = """You are an expert copywriter. Paraphrase the following email body to avoid spam filters.
+        Keep the exact same meaning, tone, and length, but change about 15-20% of the word choices.
+        CRITICAL: If you see raw variables like {{name}}, {{first_name}}, {{icebreaker}}, {{bio}}, or any other bracketed texts, YOU MUST LEAVE THEM EXACTLY AS THEY ARE.
+        CRITICAL INSTRUCTIONS:
+        1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
+        2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
+        Return ONLY the rewritten text, nothing else."""
+        
+        headers = {
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "sonar-pro",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": text}
+            ]
+        }
+        
+        response = requests.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload, timeout=15)
+        response.raise_for_status()
+        
+        content = response.json()['choices'][0]['message']['content'].strip()
+        # Clean up any markdown blocks if the AI ignored instructions
+        if '```html' in content: content = content.split('```html')[1].split('```')[0].strip()
+        elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
+        
+        return content
+    except Exception as e:
+        logger.error(f"Paraphrase error: {e}")
+        return text # fallback to original
+
 
 @app.route('/api/sequences/create', methods=['POST'])
 def create_sequences():
@@ -496,6 +538,11 @@ def create_sequences():
                 
                 subject = template['subject_template']
                 body = template['body_template']
+                
+                # AI Paraphrase for follow-up steps (Step 2+) to avoid spam filters
+                if template['step_number'] > 1:
+                    body = paraphrase_text(body)
+                
                 for key, val in variables.items():
                     subject = subject.replace(f'{{{{{key}}}}}', val)
                     body = body.replace(f'{{{{{key}}}}}', val)

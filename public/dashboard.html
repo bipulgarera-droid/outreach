@@ -924,7 +924,7 @@
                                     <input type="text" id="t-subject-${t.id}" value="${t.subject_template.replace(/"/g, '&quot;')}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500">
                                 </div>
                                 <div>
-                                    <label class="block text-xs text-gray-400 mb-1">Body HTML</label>
+                                    <label class="block text-xs text-gray-400 mb-1">Body Text</label>
                                     <textarea id="t-body-${t.id}" rows="6" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-violet-500">${t.body_template}</textarea>
                                 </div>
                             </div>
@@ -1052,7 +1052,7 @@
                             <input type="text" id="seq-edit-subject" value="${seq.subject.replace(/"/g, '&quot;')}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white">
                         </div>
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">Body HTML</label>
+                            <label class="block text-xs text-gray-400 mb-1">Body Text</label>
                             <textarea id="seq-edit-body" rows="8" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm">${seq.body}</textarea>
                         </div>
                     </div>
