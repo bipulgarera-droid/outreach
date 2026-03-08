@@ -109,21 +109,32 @@ def create_project():
         # 2. Context-Aware Template Generation using Gemini
         if GEMINI_API_KEY and description:
             try:
-                system = f"""You are an elite B2B and cold-email copywriter for a project named "{name}".
+                system = f"""You are an elite cold-email copywriter for a project named "{name}".
                 The project is described as: "{description}".
                 
-                Generate a full 12-step drip email sequence tailored to this exact business description.
-                Create exactly 12 steps. 
+                Generate a 4-step cold email drip sequence tailored to this exact business description.
+                Create exactly 4 steps.
+                
+                CRITICAL COLD EMAIL RULES:
+                - NEVER include any links, URLs, or attachments in ANY step
+                - The goal of every email is to get a REPLY, not a click
+                - Step 1 must include specific, scary findings about the prospect (injected via the {{{{icebreaker}}}} variable)
+                - The CTA must ALWAYS be a variation of "Want me to send the full report?" or "Can I share the details?"
+                - Keep emails SHORT (3-5 sentences max for the body)
+                - Professional but direct tone
+                
                 Keep the tone professional yet conversational.
-                You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 12 objects.
+                You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 4 objects.
                 Each object MUST have three exact keys: 
-                - "name" (a short internal name for the string, e.g. "Intro", "Follow up 1")
+                - "name" (a short internal name, e.g. "Intro", "Follow up 1", "Nudge", "Break up")
                 - "subject_template" (the email subject line)
                 - "body_template" (the email body)
                 
                 You may use these placeholder variables in curly braces: {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}}, {{{{icebreaker}}}}.
                 The "delay_days" will be calculated automatically by the system, just focus on the content.
-                Ensure step 1 is a strong introduction and MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template to seamlessly inject our pre-researched personalized intro. Steps 2-12 should be polite follow-ups, value adds, case studies, or break-up emails.
+                Step 1 MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template.
+                Steps 2-3 should be short follow-ups that re-emphasize the value of the report.
+                Step 4 should be a polite break-up email.
                 Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
                 
                 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -139,18 +150,18 @@ def create_project():
                 import json
                 steps = json.loads(content)
                 
-                # Standard delay pattern for a 12 step campaign
-                delays = [0, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120]
+                # Standard delay pattern for a 4 step campaign
+                delays = [0, 3, 7, 14]
                 
                 templates_to_insert = []
-                for i, step in enumerate(steps[:12]):
+                for i, step in enumerate(steps[:4]):
                     templates_to_insert.append({
                         'project_id': project_id,
                         'name': step.get('name', f'Step {i+1}'),
                         'step_number': i + 1,
                         'subject_template': step.get('subject_template', f'Follow up {i}'),
                         'body_template': step.get('body_template', 'Placeholder body'),
-                        'delay_days': delays[i] if i < len(delays) else 30
+                        'delay_days': delays[i] if i < len(delays) else 14
                     })
                 
                 if templates_to_insert:
@@ -968,21 +979,32 @@ def seed_templates():
         templates_to_insert = []
         if GEMINI_API_KEY and description:
             try:
-                system = f"""You are an elite B2B and cold-email copywriter for a project named "{project_name}".
+                system = f"""You are an elite cold-email copywriter for a project named "{project_name}".
                 The project is described as: "{description}".
                 
-                Generate a full 12-step drip email sequence tailored to this exact business description.
-                Create exactly 12 steps. 
+                Generate a 4-step cold email drip sequence tailored to this exact business description.
+                Create exactly 4 steps.
+                
+                CRITICAL COLD EMAIL RULES:
+                - NEVER include any links, URLs, or attachments in ANY step
+                - The goal of every email is to get a REPLY, not a click
+                - Step 1 must include specific, scary findings about the prospect (injected via the {{{{icebreaker}}}} variable)
+                - The CTA must ALWAYS be a variation of "Want me to send the full report?" or "Can I share the details?"
+                - Keep emails SHORT (3-5 sentences max for the body)
+                - Professional but direct tone
+                
                 Keep the tone professional yet conversational.
-                You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 12 objects.
+                You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 4 objects.
                 Each object MUST have three exact keys: 
-                - "name" (a short internal name for the string, e.g. "Intro", "Follow up 1")
+                - "name" (a short internal name, e.g. "Intro", "Follow up 1", "Nudge", "Break up")
                 - "subject_template" (the email subject line)
                 - "body_template" (the email body)
                 
                 You may use these placeholder variables in curly braces: {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}}, {{{{icebreaker}}}}.
                 The "delay_days" will be calculated automatically by the system, just focus on the content.
-                Ensure step 1 is a strong introduction and MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template to seamlessly inject our pre-researched personalized intro. Steps 2-12 should be polite follow-ups, value adds, case studies, or break-up emails.
+                Step 1 MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template.
+                Steps 2-3 should be short follow-ups that re-emphasize the value of the report.
+                Step 4 should be a polite break-up email.
                 Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
                 
                 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -997,38 +1019,30 @@ def seed_templates():
                 
                 steps = json.loads(content)
                 
-                delays = [0, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120]
+                delays = [0, 3, 7, 14]
                 
-                for i, step in enumerate(steps[:12]):
+                for i, step in enumerate(steps[:4]):
                     templates_to_insert.append({
                         'project_id': project_id,
                         'name': step.get('name', f'Step {i+1}'),
                         'step_number': i + 1,
                         'subject_template': step.get('subject_template', f'Follow up {i}'),
                         'body_template': step.get('body_template', 'Placeholder body'),
-                        'delay_days': delays[i] if i < len(delays) else 30
+                        'delay_days': delays[i] if i < len(delays) else 14
                     })
                     
             except Exception as ai_e:
                 logger.error(f"Gemini template generation failed: {ai_e}")
                 templates_to_insert = []  # Fall through to fallback
         
-        # Fallback: generic 12-step sequence if Gemini fails or no description
+        # Fallback: generic 4-step sequence if Gemini fails or no description
         if not templates_to_insert:
-            delays = [0, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120]
+            delays = [0, 3, 7, 14]
             fallback_steps = [
-                {'name': 'Introduction', 'subject_template': 'Quick intro, {{first_name}}', 'body_template': 'Hi {{first_name}},\n\n{{icebreaker}}\n\nI wanted to reach out because I think there could be a great fit between what we do and what you\'re working on.\n\nWould you be open to a brief chat this week?\n\nBest,\n[Your Name]'},
-                {'name': 'Follow Up 1', 'subject_template': 'Following up on my note', 'body_template': 'Hi {{first_name}},\n\nJust circling back on my previous email. I know how busy things get.\n\nI\'d love to share a quick overview of how we might help. Would 15 minutes work this week?\n\nCheers,\n[Your Name]'},
-                {'name': 'Value Add', 'subject_template': 'Thought you\'d find this useful', 'body_template': 'Hi {{first_name}},\n\nI came across something relevant to what you\'re doing and thought I\'d share it.\n\n[Insert relevant insight, article, or case study]\n\nNo strings attached — just thought of you.\n\nBest,\n[Your Name]'},
-                {'name': 'Case Study', 'subject_template': 'How [similar company] achieved [result]', 'body_template': 'Hi {{first_name}},\n\nI wanted to share a quick success story that might resonate with you.\n\n[Brief case study: challenge → solution → result]\n\nI think we could achieve something similar for your team. Worth a conversation?\n\nCheers,\n[Your Name]'},
-                {'name': 'Different Angle', 'subject_template': 'Different approach for {{first_name}}', 'body_template': 'Hi {{first_name}},\n\nI realize my previous emails might not have hit the mark, so let me try a different angle.\n\n[New value proposition or benefit]\n\nIs this more relevant to what you\'re currently focused on?\n\nBest,\n[Your Name]'},
-                {'name': 'Social Proof', 'subject_template': 'Others in your space are seeing results', 'body_template': 'Hi {{first_name}},\n\nJust wanted to mention that several teams similar to yours have been seeing great results with our approach.\n\n[Brief testimonial or stat]\n\nHappy to walk you through the specifics if you\'re curious.\n\nCheers,\n[Your Name]'},
-                {'name': 'Quick Question', 'subject_template': 'Quick question, {{first_name}}', 'body_template': 'Hi {{first_name}},\n\nI have a quick question — are you currently looking to [improve X / solve Y / grow Z]?\n\nIf so, I have some ideas I\'d love to share. If not, no worries at all.\n\nBest,\n[Your Name]'},
-                {'name': 'Insight Share', 'subject_template': 'An insight about [industry trend]', 'body_template': 'Hi {{first_name}},\n\nI\'ve been noticing an interesting trend in your space and thought you might find this relevant.\n\n[Industry insight or trend observation]\n\nWould love to discuss how this might impact what you\'re working on.\n\nCheers,\n[Your Name]'},
-                {'name': 'Direct Ask', 'subject_template': 'Can we chat this week?', 'body_template': 'Hi {{first_name}},\n\nI\'ll be direct — I think a 15-minute conversation could be really valuable for both of us.\n\nI\'ve done my research on what you\'re building, and I have some specific ideas I\'d like to share.\n\nWould [Day 1] or [Day 2] work for a quick call?\n\nBest,\n[Your Name]'},
-                {'name': 'Final Value', 'subject_template': 'One last thing before I go', 'body_template': 'Hi {{first_name}},\n\nI don\'t want to be that person who keeps emailing, so I\'ll keep this brief.\n\n[One compelling reason / final value point]\n\nIf the timing isn\'t right, I completely understand. But if things change, my door is always open.\n\nWishing you the best,\n[Your Name]'},
-                {'name': 'Breakup Email', 'subject_template': 'Should I close your file?', 'body_template': 'Hi {{first_name}},\n\nI haven\'t heard back, so I\'m guessing the timing isn\'t right. Totally understandable.\n\nI\'ll close out your file on my end, but if things change in the future, feel free to reach out anytime.\n\nWishing you continued success,\n[Your Name]'},
-                {'name': 'Reopen', 'subject_template': 'Checking in, {{first_name}}', 'body_template': 'Hi {{first_name}},\n\nIt\'s been a while since we last connected. A lot has changed on our end and I thought it might be worth reconnecting.\n\n[Brief update on what\'s new]\n\nIs now a better time to chat?\n\nBest,\n[Your Name]'},
+                {'name': 'Introduction', 'subject_template': 'Quick question about {{company}}', 'body_template': 'Hi {{first_name}},\n\n{{icebreaker}}\n\nI put together a detailed report with specific fixes. Want me to send it over?\n\nBest,\nBipul'},
+                {'name': 'Nudge', 'subject_template': 'The report for {{company}} is ready', 'body_template': 'Hi {{first_name}},\n\nJust a quick follow-up — the report I mentioned for {{company}} is ready to go. Happy to share whenever you like.\n\nCheers,\nBipul'},
+                {'name': 'Value Reminder', 'subject_template': 'One more thing about {{company}}', 'body_template': 'Hi {{first_name}},\n\nI noticed a couple more things while reviewing {{company}} that are costing you traffic and leads. Worth a quick look.\n\nShall I send the full breakdown?\n\nBest,\nBipul'},
+                {'name': 'Break Up', 'subject_template': 'Should I close your file, {{first_name}}?', 'body_template': 'Hi {{first_name}},\n\nHaven\'t heard back so I\'m guessing the timing isn\'t right. Totally understand.\n\nThe report won\'t expire — just reply whenever you\'d like me to send it.\n\nWishing you the best,\nBipul'},
             ]
             for i, step in enumerate(fallback_steps):
                 templates_to_insert.append({
@@ -1037,7 +1051,7 @@ def seed_templates():
                     'step_number': i + 1,
                     'subject_template': step['subject_template'],
                     'body_template': step['body_template'],
-                    'delay_days': delays[i] if i < len(delays) else 30
+                    'delay_days': delays[i] if i < len(delays) else 14
                 })
         
         # Insert all templates
