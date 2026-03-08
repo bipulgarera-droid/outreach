@@ -118,21 +118,27 @@ def create_project():
                 CRITICAL COLD EMAIL RULES:
                 - NEVER include any links, URLs, or attachments in ANY step
                 - The goal of every email is to get a REPLY, not a click
-                - Step 1 must include specific, scary findings about the prospect (injected via the {{{{icebreaker}}}} variable)
                 - The CTA must ALWAYS be a variation of "Want me to send the full report?" or "Can I share the details?"
                 - Keep emails SHORT (3-5 sentences max for the body)
                 - Professional but direct tone
                 
-                Keep the tone professional yet conversational.
+                IMPORTANT — UNDERSTANDING THE VARIABLES:
+                - {{{{icebreaker}}}} is a WARM PERSONALIZED INTRO about the prospect's business. It is NOT about issues or problems. It contains researched info about what the business does, their recent work, accomplishments, etc. Use it as the opening line to show you've done your homework on THEM.
+                - After the icebreaker, the email body should transition into GENERIC issue findings relevant to the project niche (e.g. slow page speed, missing meta tags, low engagement, competitors outperforming them). These findings are STATIC TEXT in the template — do NOT put them in {{{{icebreaker}}}}.
+                - {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}} are standard contact variables.
+                
+                TEMPLATE STRUCTURE FOR STEP 1:
+                1. Open with {{{{icebreaker}}}} as a warm, personalized greeting showing you know their business
+                2. Transition to generic but scary findings relevant to the niche (page speed, missing tags, competitor gaps, etc.)
+                3. Close with a permission-based CTA asking if they want the full report
+                
                 You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 4 objects.
                 Each object MUST have three exact keys: 
                 - "name" (a short internal name, e.g. "Intro", "Follow up 1", "Nudge", "Break up")
                 - "subject_template" (the email subject line)
                 - "body_template" (the email body)
                 
-                You may use these placeholder variables in curly braces: {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}}, {{{{icebreaker}}}}.
-                The "delay_days" will be calculated automatically by the system, just focus on the content.
-                Step 1 MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template.
+                Step 1 MUST include the exact text "{{{{icebreaker}}}}" in its body_template as the opening.
                 Steps 2-3 should be short follow-ups that re-emphasize the value of the report.
                 Step 4 should be a polite break-up email.
                 Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
@@ -988,21 +994,27 @@ def seed_templates():
                 CRITICAL COLD EMAIL RULES:
                 - NEVER include any links, URLs, or attachments in ANY step
                 - The goal of every email is to get a REPLY, not a click
-                - Step 1 must include specific, scary findings about the prospect (injected via the {{{{icebreaker}}}} variable)
                 - The CTA must ALWAYS be a variation of "Want me to send the full report?" or "Can I share the details?"
                 - Keep emails SHORT (3-5 sentences max for the body)
                 - Professional but direct tone
                 
-                Keep the tone professional yet conversational.
+                IMPORTANT — UNDERSTANDING THE VARIABLES:
+                - {{{{icebreaker}}}} is a WARM PERSONALIZED INTRO about the prospect's business. It is NOT about issues or problems. It contains researched info about what the business does, their recent work, accomplishments, etc. Use it as the opening line to show you've done your homework on THEM.
+                - After the icebreaker, the email body should transition into GENERIC issue findings relevant to the project niche (e.g. slow page speed, missing meta tags, low engagement, competitors outperforming them). These findings are STATIC TEXT in the template — do NOT put them in {{{{icebreaker}}}}.
+                - {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}} are standard contact variables.
+                
+                TEMPLATE STRUCTURE FOR STEP 1:
+                1. Open with {{{{icebreaker}}}} as a warm, personalized greeting showing you know their business
+                2. Transition to generic but scary findings relevant to the niche (page speed, missing tags, competitor gaps, etc.)
+                3. Close with a permission-based CTA asking if they want the full report
+                
                 You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 4 objects.
                 Each object MUST have three exact keys: 
                 - "name" (a short internal name, e.g. "Intro", "Follow up 1", "Nudge", "Break up")
                 - "subject_template" (the email subject line)
                 - "body_template" (the email body)
                 
-                You may use these placeholder variables in curly braces: {{{{first_name}}}}, {{{{name}}}}, {{{{company}}}}, {{{{icebreaker}}}}.
-                The "delay_days" will be calculated automatically by the system, just focus on the content.
-                Step 1 MUST logically include the exact text "{{{{icebreaker}}}}" somewhere in its body_template.
+                Step 1 MUST include the exact text "{{{{icebreaker}}}}" in its body_template as the opening.
                 Steps 2-3 should be short follow-ups that re-emphasize the value of the report.
                 Step 4 should be a polite break-up email.
                 Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
@@ -1039,7 +1051,7 @@ def seed_templates():
         if not templates_to_insert:
             delays = [0, 3, 7, 14]
             fallback_steps = [
-                {'name': 'Introduction', 'subject_template': 'Quick question about {{company}}', 'body_template': 'Hi {{first_name}},\n\n{{icebreaker}}\n\nI put together a detailed report with specific fixes. Want me to send it over?\n\nBest,\nBipul'},
+                {'name': 'Introduction', 'subject_template': 'Quick question about {{company}}', 'body_template': 'Hi {{first_name}},\n\n{{icebreaker}}\n\nWhile looking into {{company}}, I noticed a few things that might be costing you customers — slow page load times, missing meta tags, and some SEO gaps your competitors are already capitalizing on.\n\nI put together a quick report with the specific findings. Want me to send it over?\n\nBest,\nBipul'},
                 {'name': 'Nudge', 'subject_template': 'The report for {{company}} is ready', 'body_template': 'Hi {{first_name}},\n\nJust a quick follow-up — the report I mentioned for {{company}} is ready to go. Happy to share whenever you like.\n\nCheers,\nBipul'},
                 {'name': 'Value Reminder', 'subject_template': 'One more thing about {{company}}', 'body_template': 'Hi {{first_name}},\n\nI noticed a couple more things while reviewing {{company}} that are costing you traffic and leads. Worth a quick look.\n\nShall I send the full breakdown?\n\nBest,\nBipul'},
                 {'name': 'Break Up', 'subject_template': 'Should I close your file, {{first_name}}?', 'body_template': 'Hi {{first_name}},\n\nHaven\'t heard back so I\'m guessing the timing isn\'t right. Totally understand.\n\nThe report won\'t expire — just reply whenever you\'d like me to send it.\n\nWishing you the best,\nBipul'},
