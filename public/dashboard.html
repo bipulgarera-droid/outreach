@@ -574,94 +574,112 @@
             try {
                 const res = await apiFetch('/api/dashboard/daily-snapshot');
                 const data = await res.json();
-                const snapshot = data.snapshot || { automatic: [], manual_wa: [], manual_ig: [] };
+                if (data.error) throw new Error(data.error);
 
-                const autoCount = snapshot.automatic.length;
-                const waCount = snapshot.manual_wa.length;
-                const igCount = snapshot.manual_ig.length;
+                const projects = data.projects || [];
+                const total = data.total_pending || 0;
 
                 actions.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">Pending Total: ${data.total_pending || 0}</span>
+                        <span class="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">Pending Total: ${total}</span>
                     </div>
                 `;
 
-                area.innerHTML = `
-                    <div class="grid grid-cols-3 gap-4 mb-6">
-                        ${statCard('mail', 'violet', autoCount, 'Automatic Emails Pending')}
-                        ${statCard('message-circle', 'emerald', waCount, 'WhatsApp Pending')}
-                        ${statCard('instagram', 'pink', igCount, 'Instagram Pending')}
-                    </div>
+                if (projects.length === 0) {
+                    area.innerHTML = `<div class="flex flex-col items-center justify-center mt-20 text-gray-500"><i data-lucide="check-circle" class="w-10 h-10 mb-3 text-emerald-600"></i><p class="text-sm">You're all caught up! No pending tasks for today.</p></div>`;
+                    lucide.createIcons();
+                    return;
+                }
 
-                    ${renderSnapshotList('WhatsApp Tasks', 'message-circle', 'text-emerald-400', snapshot.manual_wa, 'wa')}
-                    ${renderSnapshotList('Instagram Tasks', 'instagram', 'text-pink-400', snapshot.manual_ig, 'ig')}
-                `;
+                area.innerHTML = projects.map(project => `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-bold uppercase tracking-widest text-gray-500">${project.name}</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">${project.steps.length} tasks</span>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-500 text-xs">
+                                        <th class="text-left px-4 py-2 font-medium">Contact</th>
+                                        <th class="text-left px-4 py-2 font-medium">Step</th>
+                                        <th class="text-left px-4 py-2 font-medium">Scheduled</th>
+                                        <th class="text-left px-4 py-2 font-medium">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${project.steps.map((s, i) => `
+                                    <tr id="snap-row-${s.id}" class="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 cursor-pointer" onclick="toggleSnapshotBody('${s.id}')">
+                                        <td class="px-4 py-3">
+                                            <div class="font-medium text-white">${s.contact_name || '—'}</div>
+                                            <div class="text-xs text-gray-500">${s.contact_email || '—'}</div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="text-gray-300">${s.subject || '—'}</div>
+                                            <div class="text-xs text-gray-600">Step ${s.step_number || i + 1}</div>
+                                            <div id="snap-body-${s.id}" class="hidden mt-2 text-xs text-gray-400 bg-gray-950 p-2 rounded max-w-sm whitespace-pre-wrap">${(s.body || '').substring(0, 500)}${(s.body || '').length > 500 ? '…' : ''}</div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            ${s.is_overdue
+                        ? `<span class="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full border border-red-900/50 mr-1">Overdue</span>`
+                        : `<span class="text-xs bg-sky-900/30 text-sky-400 px-2 py-0.5 rounded-full border border-sky-900/40 mr-1">Today</span>`
+                    }
+                                            <span class="text-xs text-gray-500">${s.scheduled_at ? s.scheduled_at.split('T')[0] : ''}</span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex gap-1 flex-wrap" onclick="event.stopPropagation()">
+                                                ${s.contact_email ? `
+                                                <button onclick="markSnapshotDone('${s.id}', 'sent', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-violet-900/40 hover:text-violet-300 hover:border-violet-800 transition-colors">✉ Email</button>
+                                                ` : ''}
+                                                ${s.clean_phone ? `
+                                                <a href="https://wa.me/${s.clean_phone}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 hover:border-emerald-800 transition-colors">📱 Open WA</a>
+                                                <button onclick="markSnapshotDone('${s.id}', 'sent', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 hover:border-emerald-800 transition-colors">✓ WA Done</button>
+                                                ` : ''}
+                                                ${s.clean_ig ? `
+                                                <a href="https://instagram.com/${s.clean_ig}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 hover:border-pink-800 transition-colors">📷 Open IG</a>
+                                                <button onclick="markSnapshotDone('${s.id}', 'sent', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 hover:border-pink-800 transition-colors">✓ IG Done</button>
+                                                ` : ''}
+                                                <button onclick="markSnapshotDone('${s.id}', 'replied', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-amber-600 border border-gray-700 rounded hover:bg-amber-900/40 hover:text-amber-300 hover:border-amber-800 transition-colors">↩ Replied</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `).join('');
+
                 lucide.createIcons();
             } catch (e) {
                 area.innerHTML = `<div class="text-red-400 p-4">Error loading snapshot: ${e.message}</div>`;
             }
         }
 
-        function renderSnapshotList(title, icon, iconColor, steps, channel) {
-            if (!steps || steps.length === 0) return '';
+        function toggleSnapshotBody(id) {
+            const el = document.getElementById(`snap-body-${id}`);
+            if (el) el.classList.toggle('hidden');
+        }
 
-            // Group by project
-            const byProject = {};
-            steps.forEach(s => {
-                const pName = s.projects?.name || 'Unknown Project';
-                if (!byProject[pName]) byProject[pName] = [];
-                byProject[pName].push(s);
-            });
-
-            let groupsHtml = '';
-            for (const [pName, pSteps] of Object.entries(byProject)) {
-                groupsHtml += `
-                    <div class="mt-4 first:mt-0 mb-2">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">${pName}</span>
-                    </div>
-                `;
-                groupsHtml += pSteps.map(s => {
-                    const contact = s.contacts || {};
-                    const waLink = channel === 'wa' && s.clean_phone ? `https://wa.me/${s.clean_phone}` : '#';
-                    const igLink = channel === 'ig' && s.clean_ig ? `https://instagram.com/${s.clean_ig}` : '#';
-                    const actionUrl = channel === 'wa' ? waLink : igLink;
-                    const btnColor = channel === 'wa' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-pink-600 hover:bg-pink-500';
-
-                    return `
-                    <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex gap-4 mt-2 mb-4">
-                        <div class="flex-1">
-                            <h4 class="font-medium text-white mb-1"><a href="${actionUrl}" target="_blank" class="hover:underline">${contact.name || 'Unknown'}</a></h4>
-                            <p class="text-xs text-gray-400 mb-2">${contact.email || ''}</p>
-                            <div class="bg-gray-950 p-3 rounded text-sm text-gray-300">
-                                <div class="font-medium text-white mb-2 pb-1 border-b border-gray-800">${s.subject}</div>
-                                <div class="whitespace-pre-wrap">${s.body}</div>
-                            </div>
-                        </div>
-                        <div class="w-48 shrink-0 flex flex-col gap-2">
-                            <a href="${actionUrl}" target="_blank" class="text-center w-full ${btnColor} text-white px-3 py-2 rounded text-sm font-medium transition-colors">
-                                Open ${channel.toUpperCase()}
-                            </a>
-                            <button onclick="markSequenceStatus('${s.id}', 'sent', '${channel}')" class="w-full bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors">
-                                ✓ Mark as Done
-                            </button>
-                            <button onclick="markSequenceStatus('${s.id}', 'replied')" class="w-full bg-gray-900 border border-amber-900/50 hover:bg-amber-900/30 text-amber-500 px-3 py-2 rounded text-sm font-medium transition-colors">
-                                ↩ Mark Replied
-                            </button>
-                        </div>
-                    </div>`;
-                }).join('');
+        async function markSnapshotDone(id, status, channel, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            const payload = { status };
+            if (channel) payload.manual_channel = channel;
+            try {
+                const res = await apiFetch(`/api/sequences/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('Failed');
+                const row = document.getElementById(`snap-row-${id}`);
+                if (row) {
+                    row.style.opacity = '0.3';
+                    row.style.pointerEvents = 'none';
+                }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Error'; btn.disabled = false; }
             }
-
-            return `
-            <div class="bg-gray-900 border border-gray-800 rounded-xl mb-6">
-                <div class="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                    <i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i>
-                    <h3 class="text-sm font-semibold text-white">${title}</h3>
-                </div>
-                <div class="p-4">
-                    ${groupsHtml}
-                </div>
-            </div>`;
         }
 
         // =========================================================================

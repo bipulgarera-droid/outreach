@@ -237,16 +237,14 @@ def dashboard_stats():
 
 @app.route('/api/dashboard/daily-snapshot')
 def daily_snapshot():
-    """Get all pending sequence steps grouped by available manual/automatic channels."""
+    """Get all pending sequence steps grouped by project for today + overdue."""
     from datetime import timedelta
     try:
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        # We want to include everything scheduled UP TO the end of the current day in IST
         date_str = ist_now.strftime('%Y-%m-%dT23:59:59')
         
-        # Get all pending steps due for sending
         result = supabase.table('email_sequences')\
-            .select('id, subject, body, step_number, project_id, contacts(name, email, enrichment_data), projects(name)')\
+            .select('id, subject, body, step_number, project_id, scheduled_at, contacts(name, email, enrichment_data), projects(name)')\
             .eq('status', 'pending')\
             .lte('scheduled_at', date_str)\
             .order('scheduled_at')\
@@ -254,12 +252,8 @@ def daily_snapshot():
             
         pending_steps = result.data or []
         
-        # Group them
-        snapshot = {
-            'automatic': [],
-            'manual_wa': [],
-            'manual_ig': []
-        }
+        # Group by project
+        projects = {}
         
         for step in pending_steps:
             contact = step.get('contacts')
@@ -274,27 +268,37 @@ def daily_snapshot():
                 except Exception:
                     enrichment = {}
             enrichment = enrichment or {}
-                
-            # If they have an email, they are strictly part of the automatic queue
-            if contact.get('email'):
-                snapshot['automatic'].append(step)
             
-            # They can also be in manual queues if they have the respective details
-            if enrichment.get('phone'):
-                # Basic cleaning of phone for wa.me links
-                clean_phone = ''.join(filter(str.isdigit, str(enrichment['phone'])))
-                if clean_phone:
-                    step['clean_phone'] = clean_phone
-                    snapshot['manual_wa'].append(step)
-                    
+            raw_phone = enrichment.get('phone') or enrichment.get('phone_number')
+            clean_phone = ''.join(filter(str.isdigit, str(raw_phone))) if raw_phone else None
             ig_handle = enrichment.get('instagram') or enrichment.get('instagram_handle')
-            if ig_handle:
-                clean_ig = str(ig_handle).replace('@', '').strip()
-                if clean_ig:
-                    step['clean_ig'] = clean_ig
-                    snapshot['manual_ig'].append(step)
-                    
-        return jsonify({'snapshot': snapshot, 'total_pending': len(pending_steps)})
+            clean_ig = str(ig_handle).replace('@', '').strip() if ig_handle else None
+            
+            scheduled = step.get('scheduled_at', '')
+            today_str = ist_now.strftime('%Y-%m-%d')
+            is_overdue = scheduled < today_str if scheduled else False
+            
+            project_id = step.get('project_id')
+            project_name = (step.get('projects') or {}).get('name', 'Unknown Project')
+            
+            if project_id not in projects:
+                projects[project_id] = {'name': project_name, 'steps': []}
+            
+            projects[project_id]['steps'].append({
+                'id': step['id'],
+                'step_number': step.get('step_number'),
+                'subject': step.get('subject'),
+                'body': step.get('body'),
+                'scheduled_at': scheduled,
+                'is_overdue': is_overdue,
+                'contact_name': contact.get('name'),
+                'contact_email': contact.get('email'),
+                'clean_phone': clean_phone,
+                'clean_ig': clean_ig,
+            })
+        
+        total = sum(len(p['steps']) for p in projects.values())
+        return jsonify({'projects': list(projects.values()), 'total_pending': total})
     except Exception as e:
         logger.error(f"Daily snapshot error: {e}")
         return jsonify({'error': str(e)}), 500
