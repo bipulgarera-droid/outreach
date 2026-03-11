@@ -897,7 +897,7 @@
                                                             <tr class="hover:bg-gray-800/20 cursor-pointer" onclick="editSequenceStep('${s.id}')" title="Click to edit email text">
                                                                 <td class="py-2 text-gray-400">Step ${s.step_number}</td>
                                                                 <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4">${s.subject}</td>
-                                                                <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}${s.manual_channel ? ' (' + s.manual_channel.toUpperCase() + ')' : ''}</span></td>
+                                                                <td class="py-2"><span id="seq-status-cell-${s.id}" class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}${s.manual_channel ? ' (' + s.manual_channel.toUpperCase() + ')' : ''}</span></td>
                                                                 <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2">
@@ -906,7 +906,6 @@
                                                                             <button id="seq-btn-email-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'email', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark email sent">✉ Email</button>
                                                                             <button id="seq-btn-wa-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark WA sent">📱 WA</button>
                                                                             <button id="seq-btn-ig-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark IG sent">📷 IG</button>
-                                                                            <button id="seq-btn-status-${s.id}" class="text-xs px-1.5 py-0.5 rounded status-${s.status} pointer-events-none">${s.status}</button>
                                                                             <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-amber-900/50 hover:text-amber-400 transition-colors" title="Mark as replied">↩ Replied</button>
                                                                         </div>
                                                                     ` : ''}
@@ -1341,9 +1340,9 @@
             await fetch(`/api/sequences/${stepId}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
             });
-            // Update inline status badge
-            const badge = document.getElementById(`seq-btn-status-${stepId}`);
-            if (badge) { badge.className = `text-xs px-1.5 py-0.5 rounded status-${status} pointer-events-none`; badge.textContent = status; }
+            // Update inline status badge in Status column
+            const badge = document.getElementById(`seq-status-cell-${stepId}`);
+            if (badge) { badge.className = `status-${status} px-1.5 py-0.5 rounded-sm`; badge.textContent = status; }
             // Update data-db-status on all channel buttons
             ['email', 'wa', 'ig'].forEach(ch => {
                 const b = document.getElementById(`seq-btn-${ch}-${stepId}`);
