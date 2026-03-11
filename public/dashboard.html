@@ -903,10 +903,11 @@
                                                                 <td class="py-2">
                                                                     ${(s.status === 'pending' || s.status === 'sent') ? `
                                                                         <div class="flex gap-1 flex-wrap">
-                                                                            <button id="seq-btn-email-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'email', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark email sent">✉ Email</button>
-                                                                            <button id="seq-btn-wa-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark WA sent">📱 WA</button>
-                                                                            <button id="seq-btn-ig-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark IG sent">📷 IG</button>
-                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-amber-900/50 hover:text-amber-400 transition-colors" title="Mark as replied — cancels all future steps">↩ Replied</button>
+                                                                            <button id="seq-btn-email-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'email', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark email sent">✉ Email</button>
+                                                                            <button id="seq-btn-wa-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark WA sent">📱 WA</button>
+                                                                            <button id="seq-btn-ig-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark IG sent">📷 IG</button>
+                                                                            <button id="seq-btn-status-${s.id}" class="text-xs px-1.5 py-0.5 rounded status-${s.status} pointer-events-none">${s.status}</button>
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-amber-900/50 hover:text-amber-400 transition-colors" title="Mark as replied">↩ Replied</button>
                                                                         </div>
                                                                     ` : ''}
                                                                 </td>
@@ -1322,37 +1323,85 @@
 
         // Per-channel state: persisted in localStorage keyed by sequence step ID
         const SEQ_CHANNEL_KEY = 'seq_channels';
+        const CH_COLORS = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
+        const CH_BASE = 'text-xs px-2 py-1 rounded transition-colors';
 
         function _getSeqChannels() {
             try { return JSON.parse(localStorage.getItem(SEQ_CHANNEL_KEY) || '{}'); } catch { return {}; }
         }
+        function _setSeqChannels(data) { localStorage.setItem(SEQ_CHANNEL_KEY, JSON.stringify(data)); }
 
-        function _setSeqChannels(data) {
-            localStorage.setItem(SEQ_CHANNEL_KEY, JSON.stringify(data));
+        function _applyBtnColor(btn, channel, on) {
+            btn.className = on ? `${CH_BASE} border ${CH_COLORS[channel] || 'bg-gray-700 text-white border-gray-600'}` : `${CH_BASE} bg-gray-800 text-gray-400 border border-gray-700`;
         }
 
-        function toggleSeqChannel(stepId, channel, btn) {
+        async function _syncStatusToDB(stepId, status) {
+            const body = { status };
+            if (status === 'sent') body.sent_at = new Date().toISOString();
+            await fetch(`/api/sequences/${stepId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            // Update inline status badge
+            const badge = document.getElementById(`seq-btn-status-${stepId}`);
+            if (badge) { badge.className = `text-xs px-1.5 py-0.5 rounded status-${status} pointer-events-none`; badge.textContent = status; }
+            // Update data-db-status on all channel buttons
+            ['email', 'wa', 'ig'].forEach(ch => {
+                const b = document.getElementById(`seq-btn-${ch}-${stepId}`);
+                if (b) b.dataset.dbStatus = status;
+            });
+        }
+
+        async function toggleSeqChannel(stepId, channel, btn) {
             const data = _getSeqChannels();
             const key = `${stepId}:${channel}`;
-            const colors = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
-            if (data[key]) {
+            const wasDone = !!data[key];
+            const dbStatus = btn.dataset.dbStatus;
+
+            if (wasDone) {
+                // UNDO
                 delete data[key];
-                btn.className = 'text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors';
+                _applyBtnColor(btn, channel, false);
+                // If email was from DB (status=sent) and we're undoing email → revert to pending
+                if (channel === 'email' && dbStatus === 'sent') {
+                    await _syncStatusToDB(stepId, 'pending');
+                }
+                // If any channel was the last one holding a 'sent' DB state, revert too
+                const emailBtn = document.getElementById(`seq-btn-email-${stepId}`);
+                const allWereOn = emailBtn && emailBtn.dataset.dbStatus === 'sent';
+                if (allWereOn && channel !== 'email') {
+                    await _syncStatusToDB(stepId, 'pending');
+                }
             } else {
+                // MARK DONE
                 data[key] = true;
-                btn.className = `text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white'} rounded transition-colors`;
+                _applyBtnColor(btn, channel, true);
+                // Check if all 3 are now on → mark DB as sent
+                const allOn = data[`${stepId}:email`] && data[`${stepId}:wa`] && data[`${stepId}:ig`];
+                if (allOn && dbStatus !== 'sent') {
+                    await _syncStatusToDB(stepId, 'sent');
+                }
             }
             _setSeqChannels(data);
         }
 
         function restoreSeqChannelColors() {
             const data = _getSeqChannels();
-            const colors = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
+            // Restore from localStorage
             for (const key of Object.keys(data)) {
                 const [stepId, channel] = key.split(':');
                 const btn = document.getElementById(`seq-btn-${channel}-${stepId}`);
-                if (btn) btn.className = `text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white'} rounded transition-colors`;
+                if (btn) _applyBtnColor(btn, channel, true);
             }
+            // Pre-color Email buttons from DB status=sent (and seed localStorage)
+            document.querySelectorAll('[id^="seq-btn-email-"]').forEach(btn => {
+                const stepId = btn.id.replace('seq-btn-email-', '');
+                const key = `${stepId}:email`;
+                if (btn.dataset.dbStatus === 'sent' && !data[key]) {
+                    data[key] = true;
+                    _applyBtnColor(btn, 'email', true);
+                }
+            });
+            _setSeqChannels(data);
         }
 
         async function markSequenceStatus(sequenceId, newStatus, channel = null) {
