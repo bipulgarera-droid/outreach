@@ -29,8 +29,8 @@ load_dotenv(env_path)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
-PERPLEXITY_URL = 'https://api.perplexity.ai/chat/completions'
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# We import google.genai inside the function to avoid global import errors if not installed
 
 
 def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichment_data: dict = None) -> str | None:
@@ -46,8 +46,8 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     Returns:
         Icebreaker string or None on error
     """
-    if not PERPLEXITY_API_KEY:
-        logger.error("PERPLEXITY_API_KEY not set")
+    if not GEMINI_API_KEY:
+        logger.error("GEMINI_API_KEY not set")
         return None
     
     context = f"Name: {name}"
@@ -90,33 +90,30 @@ CRITICAL INSTRUCTIONS:
 
 Reply with ONLY the 2-sentence icebreaker, nothing else."""
 
-    headers = {
-        'Authorization': f'Bearer {PERPLEXITY_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    
-    payload = {
-        'model': 'sonar',
-        'messages': [
-            {
-                'role': 'system',
-                'content': 'You are an elite B2B and cold-email publicist writing personalized outreach emails. Be specific, accurate about their current role, warm, and concise.'
-            },
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ],
-        'max_tokens': 200,
-        'temperature': 0.7
-    }
-    
     try:
-        response = requests.post(PERPLEXITY_URL, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        from google import genai
+        from google.genai import types
         
-        icebreaker = data.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_instruction = 'You are an elite B2B and cold-email publicist writing personalized outreach emails. Be specific, accurate about their current role, warm, and concise.'
+        
+        # Configure Gemini 2.5 Pro with Google Search tool so it avoids hallucinating generic business names
+        config = types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=200,
+            system_instruction=system_instruction,
+            tools=[{"google_search": {}}]
+        )
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=prompt,
+            config=config
+        )
+        
+        icebreaker = response.text.strip()
+
         
         if icebreaker:
             logger.info(f"Generated icebreaker for {name}: {icebreaker[:80]}...")
