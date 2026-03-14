@@ -112,7 +112,11 @@ Reply with ONLY the 2-sentence icebreaker, nothing else."""
             config=config
         )
         
+        import re
+        
         icebreaker = response.text.strip()
+        # Forcefully strip out any citation brackets like [1] or [3] that the search tool injects
+        icebreaker = re.sub(r'\[\d+\]', '', icebreaker).strip()
 
         
         if icebreaker:
