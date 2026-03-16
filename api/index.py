@@ -735,101 +735,112 @@ def create_sequences():
         import threading
         
         def run_in_background(proj_id, contacts_data, templates_data):
-            try:
-                created = 0
-                for contact in contacts_data:
+            import re as _re
+            import json as _json
+            
+            # Shorten company name for clean email personalization
+            def _shorten_company(name):
+                if not name: return name
+                # Strip common legal suffixes
+                name = _re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=_re.IGNORECASE).strip().rstrip(',').strip()
+                # If still too long, take first 3 meaningful words
+                words = name.split()
+                if len(words) > 4:
+                    name = ' '.join(words[:3])
+                return name
+            
+            created = 0
+            errors = 0
+            for contact in contacts_data:
+                try:
                     base_date = datetime.utcnow()
                     
                     # Parse enrichment_data for LinkedIn fields
                     enrichment_data = contact.get('enrichment_data')
                     if isinstance(enrichment_data, str):
                         try:
-                            import json as _json
                             enrichment_data = _json.loads(enrichment_data)
                         except Exception:
                             enrichment_data = {}
                     elif not isinstance(enrichment_data, dict):
                         enrichment_data = {}
                     
+                    raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
+                    
+                    full_name = contact.get('name', 'there')
+                    # Don't split the name if it's meant to be a business team entity
+                    first_name = full_name if (' Team' in full_name or ' Business' in full_name or len(full_name.split()) == 1) else full_name.split()[0]
+                    
+                    variables = {
+                        'name': full_name,
+                        'first_name': first_name,
+                        'bio': contact.get('bio', ''),
+                        'icebreaker': contact.get('icebreaker', ''),
+                        'company': _shorten_company(raw_company),
+                        # Sender variables (from .env SENDER_NAME)
+                        'sender_name': SENDER_NAME,
+                        'sender_first_name': SENDER_NAME.split()[0] if SENDER_NAME else 'Bipul',
+                        # LinkedIn enrichment fields for paraphraser context
+                        'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
+                        'linkedin_company': enrichment_data.get('linkedin_company', ''),
+                        'linkedin_title': enrichment_data.get('linkedin_title', ''),
+                        'linkedin_about': enrichment_data.get('linkedin_about', ''),
+                    }
+                    
                     for template in templates_data:
-                        # Shorten company name for clean email personalization
-                        def _shorten_company(name):
-                            if not name: return name
-                            import re
-                            # Strip common legal suffixes
-                            name = re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=re.IGNORECASE).strip().rstrip(',').strip()
-                            # If still too long, take first 3 meaningful words
-                            words = name.split()
-                            if len(words) > 4:
-                                name = ' '.join(words[:3])
-                            return name
-
-                        raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
-                        
-                        full_name = contact.get('name', 'there')
-                        # Don't split the name if it's meant to be a business team entity
-                        first_name = full_name if (' Team' in full_name or ' Business' in full_name or len(full_name.split()) == 1) else full_name.split()[0]
-                        
-                        # Render template with contact variables
-                        variables = {
-                            'name': full_name,
-                            'first_name': first_name,
-                            'bio': contact.get('bio', ''),
-                            'icebreaker': contact.get('icebreaker', ''),
-                            'company': _shorten_company(raw_company),
-                            # Sender variables (from .env SENDER_NAME)
-                            'sender_name': SENDER_NAME,
-                            'sender_first_name': SENDER_NAME.split()[0] if SENDER_NAME else 'Bipul',
-                            # LinkedIn enrichment fields for paraphraser context
-                            'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
-                            'linkedin_company': enrichment_data.get('linkedin_company', ''),
-                            'linkedin_title': enrichment_data.get('linkedin_title', ''),
-                            'linkedin_about': enrichment_data.get('linkedin_about', ''),
-                        }
-                        
-                        subject = template['subject_template']
-                        body = template['body_template']
-                        
-                        # AI Paraphrase for follow-up steps (Step 2+) to avoid spam filters
-                        if template['step_number'] > 1:
-                            body = paraphrase_text(body, context=variables)
-                        
-                        for key, val in variables.items():
-                            val_str = str(val) if val is not None else ''
-                            subject = subject.replace(f'{{{{{key}}}}}', val_str)
-                            body = body.replace(f'{{{{{key}}}}}', val_str)
-                        
-                        scheduled = base_date + timedelta(days=template.get('delay_days', 0))
-                        
-                        # Dedup check: skip if sequence row already exists for this contact+template
-                        existing = supabase.table('email_sequences').select('id').eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
-                        if existing.data:
-                            logger.info(f"Skipping duplicate sequence for contact {contact['id']} template {template['id']}")
-                            continue
-                        
-                        supabase.table('email_sequences').insert({
-                            'project_id': proj_id,
-                            'contact_id': contact['id'],
-                            'template_id': template['id'],
-                            'step_number': template['step_number'],
-                            'subject': subject,
-                            'body': body,
-                            'status': 'pending',
-                            'scheduled_at': scheduled.isoformat()
-                        }).execute()
-                        
-                        created += 1
+                        try:
+                            subject = template['subject_template']
+                            body = template['body_template']
+                            
+                            # AI Paraphrase for follow-up steps (Step 2+) to avoid spam filters
+                            if template['step_number'] > 1:
+                                body = paraphrase_text(body, context=variables)
+                            
+                            for key, val in variables.items():
+                                val_str = str(val) if val is not None else ''
+                                subject = subject.replace(f'{{{{{key}}}}}', val_str)
+                                body = body.replace(f'{{{{{key}}}}}', val_str)
+                            
+                            scheduled = base_date + timedelta(days=template.get('delay_days', 0))
+                            
+                            # Dedup check: skip if sequence row already exists for this contact+template
+                            existing = supabase.table('email_sequences').select('id').eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
+                            if existing.data:
+                                logger.info(f"Skipping duplicate sequence for contact {contact['id']} template {template['id']}")
+                                continue
+                            
+                            supabase.table('email_sequences').insert({
+                                'project_id': proj_id,
+                                'contact_id': contact['id'],
+                                'template_id': template['id'],
+                                'step_number': template['step_number'],
+                                'subject': subject,
+                                'body': body,
+                                'status': 'pending',
+                                'scheduled_at': scheduled.isoformat()
+                            }).execute()
+                            
+                            created += 1
+                        except Exception as step_e:
+                            logger.error(f"Error on step {template.get('step_number')} for contact {contact.get('name')}: {step_e}")
                     
                     # Update contact status
                     supabase.table('contacts').update({
                         'status': 'in_sequence',
                         'updated_at': datetime.utcnow().isoformat()
                     }).eq('id', contact['id']).execute()
-            except Exception as e:
-                logger.error(f"Background sequence creation failed: {e}")
+                    logger.info(f"Sequence created for contact: {contact.get('name')}")
+                    
+                except Exception as contact_e:
+                    errors += 1
+                    logger.error(f"Failed to create sequence for contact {contact.get('name', contact.get('id'))}: {contact_e}")
+                    # Continue to next contact regardless
+                    continue
+            
+            logger.info(f"Background sequence creation done: {created} steps created, {errors} contact errors")
 
-        # Start thread
-        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data))
+        # Start thread (daemon=False ensures it outlives the request)
+        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data), daemon=False)
         thread.start()
         
         return jsonify({
