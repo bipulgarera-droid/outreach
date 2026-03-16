@@ -661,6 +661,35 @@ def update_sequence(sequence_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/sequences/<sequence_id>', methods=['DELETE'])
+def delete_sequence(sequence_id):
+    """Delete a single sequence step by ID."""
+    try:
+        supabase.table('email_sequences').delete().eq('id', sequence_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sequences/contact/<contact_id>', methods=['DELETE'])
+def delete_contact_sequences(contact_id):
+    """Delete ALL sequence steps for a contact and reset their status."""
+    try:
+        project_id = request.args.get('project_id')
+        query = supabase.table('email_sequences').delete().eq('contact_id', contact_id)
+        if project_id:
+            query = query.eq('project_id', project_id)
+        query.execute()
+        # Reset contact status back to icebreaker_ready so they can be re-sequenced
+        supabase.table('contacts').update({
+            'status': 'icebreaker_ready',
+            'updated_at': datetime.utcnow().isoformat()
+        }).eq('id', contact_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def paraphrase_text(text: str, context: dict = None) -> str:
     """Use Gemini to paraphrase a text while preserving variables, using prospect context if provided."""
     if not GEMINI_API_KEY:

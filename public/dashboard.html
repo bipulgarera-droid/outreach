@@ -849,6 +849,7 @@
                                 <th class="px-4 py-3 text-left font-medium">Email</th>
                                 <th class="px-4 py-3 text-left font-medium">Progress</th>
                                 <th class="px-4 py-3 text-left font-medium">Next Step</th>
+                                <th class="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-800 text-sm">
@@ -875,6 +876,11 @@
                                         </td>
                                         <td class="px-4 py-3 text-gray-500 text-xs">
                                             ${nextStep ? `Step ${nextStep.step_number} on ${new Date(nextStep.scheduled_at).toLocaleDateString()}` : 'Completed'}
+                                        </td>
+                                        <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
+                                            <button onclick="deleteContactSequence('${cid}')" title="Delete all sequences for this contact" class="text-gray-600 hover:text-red-400 transition-colors">
+                                                <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                     <!-- Expandable Steps Row -->
@@ -1723,6 +1729,17 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 showToast(`✅ ${data.message || 'Started background sequence generation'}`);
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function deleteContactSequence(contactId) {
+            if (!confirm('Delete all sequence steps for this contact? Their status will be reset so you can re-sequence them.')) return;
+            try {
+                const res = await apiFetch(`/api/sequences/contact/${contactId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast('✅ Sequence deleted');
                 loadContent();
             } catch (e) { showToast('❌ ' + e.message); }
         }
