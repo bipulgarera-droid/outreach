@@ -123,10 +123,14 @@ def create_project():
                 - Keep emails SHORT (3-5 sentences max for the body)
                 - Professional but direct tone
                 
-                VARIABLES YOU MAY USE:
-                - {{{{first_name}}}} — the contact's first name or business greeting name
-                - {{{{name}}}} — the contact's full name
-                - {{{{company}}}} — the contact's company name
+                VARIABLES YOU MAY USE (all are substituted per-contact at send time):
+                - {{{{first_name}}}} — the contact's business name without "Team" (e.g. "Jasmine Spa")
+                - {{{{name}}}} — the contact's display name with Team (e.g. "Jasmine Spa Team")
+                - {{{{company}}}} — the contact's company/business name
+                - {{{{location}}}} — the city/region the business is in (e.g. "Dubai", "London")
+                - {{{{niche}}}} — the business category/niche (e.g. "med spa", "dentist", "restaurant")
+                - {{{{sender_name}}}} — your name (the sender)
+                - {{{{sender_first_name}}}} — your first name
                 Do NOT use {{{{icebreaker}}}} — it has been removed from this system.
                 
                 TEMPLATE STRUCTURE FOR STEP 1:
