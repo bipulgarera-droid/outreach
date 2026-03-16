@@ -128,25 +128,32 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
         about = enrichment_data['linkedin_about'][:1500]
         context += f"\nLinkedIn About: {about}"
     
+    # If we have no scraped context, give Gemini a clear fallback instruction
+    no_context_instruction = ''
+    if not web_content:
+        no_context_instruction = f"""\nIMPORTANT: No website content was found. You MUST still write a icebreaker.
+    Write a warm, professional 1-2 sentence opener based ONLY on the business name and type.
+    Example: "The dedication it takes to build a standout spa brand like {{name}} is impressive — your team clearly cares about the client experience."
+    Never ask for more info. Never say you lack information. Always produce a warm sentence."""
+    
     if web_content:
         context += f"\n\nSCRAPED WEBSITE CONTENT:\n{web_content}"
     
     prompt = f"""Generate a 1-2 sentence personalized icebreaker for cold emailing this business.
-The icebreaker MUST reference something specific and REAL about what this business actually does, based on the scraped website content below.
-CRITICAL: Stick ONLY to what is in the scraped content. Do NOT assume or hallucinate anything.
-CRITICAL: Do NOT mention the sender's project, service, or reason for reaching out. 100% about THEM.
-CRITICAL: Do NOT mention any city or location unless it is explicitly mentioned in the data below.
 
-Keep it warm and genuine. Example tone: "I noticed your team's incredible focus on..." or "The work you're doing at X with Y really stood out to me..."
-
-CRITICAL RULES:
-1. NEVER include citations, footnotes, or numbers in brackets like [1] or [2].
-2. NEVER refuse or say you lack information. Always write something warm and professional.
-3. NEVER add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
+CRITICAL RULES (non-negotiable):
+1. ALWAYS produce exactly 1-2 warm, genuine sentences. NEVER refuse. NEVER ask questions. NEVER say you lack information.
+2. If website content is provided, reference something SPECIFIC from it.
+3. If NO website content is provided, write a warm professional opener based on the business name — just keep it genuine and non-generic.
+4. Do NOT mention the sender's service, product, or reason for reaching out. 100% about THEM.
+5. Do NOT include ANY citations, footnotes, or numbers in brackets like [1] or [2].
+6. Do NOT add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
+7. Do NOT mention any city or location unless explicitly in the data below.
+{no_context_instruction}
 
 {context}
 
-Reply with ONLY the icebreaker (1-2 sentences), nothing else."""
+Reply with ONLY the icebreaker (1-2 sentences). No intro, no explanation, no questions."""
 
     try:
         from google import genai
@@ -154,7 +161,12 @@ Reply with ONLY the icebreaker (1-2 sentences), nothing else."""
         
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        system_instruction = 'You are an elite cold-email publicist. Write personalized icebreakers that reference specific, real details from the provided website content. Never hallucinate.'
+        system_instruction = (
+            'You are an elite cold-email publicist. Your ONLY job is to output 1-2 warm icebreaker sentences. '
+            'You NEVER refuse, NEVER ask questions, and NEVER say you lack information. '
+            'If you have website content, reference something specific. If you have nothing, write a warm professional opener based on the business name. '
+            'Never hallucinate unverified facts, but always produce warm copy.'
+        )
         
         # No google_search grounding — we already scraped manually with Serper+Jina
         config = types.GenerateContentConfig(
@@ -178,6 +190,21 @@ Reply with ONLY the icebreaker (1-2 sentences), nothing else."""
         icebreaker = response.text.strip()
         # Forcefully strip any citation brackets like [1] or [3]
         icebreaker = re.sub(r'\[\d+\]', '', icebreaker).strip()
+        
+        # Detect refusal / question responses — replace with a safe fallback
+        refusal_signals = [
+            'could you provide', 'i don\'t have', 'i do not have', 'i need more',
+            'please provide', 'more information', 'to write a', 'i would need',
+            'i cannot', 'unfortunately', 'no information', 'not enough information',
+        ]
+        lower = icebreaker.lower()
+        is_refusal = any(sig in lower for sig in refusal_signals) or icebreaker.endswith('?')
+        
+        if is_refusal:
+            # Build a safe generic fallback from the business name
+            business_display = search_name or name
+            icebreaker = f"The work the team at {business_display} is doing really caught our eye — it's clear you put genuine care into what you offer."
+            logger.warning(f"Refusal detected for {name}, using fallback icebreaker.")
         
         if icebreaker:
             logger.info(f"Generated icebreaker for {name}: {icebreaker[:80]}...")
