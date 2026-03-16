@@ -123,29 +123,31 @@ def create_project():
                 - Keep emails SHORT (3-5 sentences max for the body)
                 - Professional but direct tone
                 
-                VARIABLES YOU MAY USE (all are substituted per-contact at send time):
-                - {{{{first_name}}}} — the contact's business name without "Team" (e.g. "Jasmine Spa")
-                - {{{{name}}}} — the contact's display name with Team (e.g. "Jasmine Spa Team")
-                - {{{{company}}}} — the contact's company/business name
-                - {{{{location}}}} — the city/region the business is in (e.g. "Dubai", "London")
-                - {{{{niche}}}} — the business category/niche (e.g. "med spa", "dentist", "restaurant")
-                - {{{{sender_name}}}} — your name (the sender)
-                - {{{{sender_first_name}}}} — your first name
-                Do NOT use {{{{icebreaker}}}} — it has been removed from this system.
+                VARIABLES — these are substituted per-contact at send time. Use them as {{{{variable}}}} in your output:
+                - {{{{first_name}}}} — contact's business name, no "Team" (e.g. "Jasmine Spa"). USE THIS in the greeting.
+                - {{{{name}}}} — contact's full display name (e.g. "Jasmine Spa Team"). USE THIS when referencing the business in the body.
+                - {{{{company}}}} — company name. Use sparingly if {{{{name}}}} already used.
+                - {{{{location}}}} — the city/region (e.g. "Dubai"). YOU MUST USE THIS at least once in Step 1.
+                - {{{{niche}}}} — the business niche (e.g. "med spa", "restaurant"). YOU MUST USE THIS at least once in Step 1.
+                - {{{{sender_first_name}}}} — the sender's first name. USE THIS in the sign-off.
+                Do NOT use {{{{icebreaker}}}}.
                 
-                TEMPLATE STRUCTURE FOR STEP 1:
-                1. Open with a warm but concise observation about the type of business they likely run (generic, no icebreaker needed)
-                2. Transition to specific issue findings relevant to the niche (page speed, missing tags, competitor gaps, etc.)
-                3. Close with a permission-based CTA asking if they want the full report
+                MANDATORY TEMPLATE STRUCTURE FOR STEP 1:
+                - Greeting: "Hi {{{{first_name}}}},"
+                - Line 1: Reference their {{{{niche}}}} business in {{{{location}}}} specifically
+                - Line 2: Mention the specific SEO/technical issues found
+                - Line 3: CTA — ask if they want the full audit report
+                - Sign-off: "Best, {{{{sender_first_name}}}}"
+                
+                Steps 2-3: Short follow-ups re-emphasizing value of the report.
+                Step 4: Polite break-up email.
                 
                 You MUST return the output as a SINGLE VALID JSON ARRAY of exactly 4 objects.
                 Each object MUST have three exact keys: 
-                - "name" (a short internal name, e.g. "Intro", "Follow up 1", "Nudge", "Break up")
+                - "name" (e.g. "Intro", "Follow up 1", "Nudge", "Break up")
                 - "subject_template" (the email subject line)
                 - "body_template" (the email body)
                 
-                Steps 2-3 should be short follow-ups that re-emphasize the value of the report.
-                Step 4 should be a polite break-up email.
                 Return ONLY the raw JSON array. Do not wrap it in markdown block quotes."""
                 
                 client = genai.Client(api_key=GEMINI_API_KEY)
