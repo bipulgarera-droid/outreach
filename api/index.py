@@ -783,55 +783,61 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_text(text: str, context: dict = None) -> str:
-    """Use Gemini to paraphrase a text while preserving variables, using prospect context if provided."""
-    if not GEMINI_API_KEY:
-        return text
+def paraphrase_texts_batch(bodies: list, context: dict = None) -> list:
+    """Paraphrase multiple email bodies in ONE Gemini Flash call.
+    Returns a list of paraphrased strings in the same order as input.
+    If anything fails, returns originals as fallback."""
+    if not GEMINI_API_KEY or not bodies:
+        return bodies
     try:
         contact_info = ""
         if context:
-            contact_info = f"\n\nPROSPECT CONTEXT:\nYou are emailing {context.get('name', 'someone')}.\n"
+            contact_info = f"\nPROSPECT CONTEXT:\nBusiness: {context.get('name', '')}, Niche: {context.get('niche', '')}, Location: {context.get('location', '')}."
             if context.get('bio'):
-                contact_info += f"Their Bio/LinkedIn Summary: {context['bio']}\n"
-            if context.get('icebreaker'):
-                contact_info += f"Our previous specific Icebreaker for them: {context['icebreaker']}\n"
-            # LinkedIn enrichment data for richer personalization
-            if context.get('linkedin_headline'):
-                contact_info += f"Their LinkedIn Headline: {context['linkedin_headline']}\n"
-            if context.get('linkedin_company'):
-                contact_info += f"Their Current Company: {context['linkedin_company']}\n"
-            if context.get('linkedin_title'):
-                contact_info += f"Their Current Title: {context['linkedin_title']}\n"
-            if context.get('linkedin_about'):
-                about_snippet = context['linkedin_about'][:800]
-                contact_info += f"Their LinkedIn About: {about_snippet}\n"
-            contact_info += "\nIf appropriate and highly relevant, weave a brief, natural reference to their background or company into the paraphrased text to make the follow-up hyper-personalized. DO NOT hallucinate facts, guess their current challenges, or assume things not explicitly stated in their bio or the icebreaker. Stick strictly to the provided facts."
+                contact_info += f" Bio: {context['bio'][:300]}"
 
-        system = f"""You are an expert cold email copywriter. Paraphrase the following email body to evade spam filters.
-        Rewrite it so it sounds genuinely fresh: restructure sentences, use synonyms, vary the sentence rhythm.
-        Aim to change ~30% of the wording while keeping the same meaning, intent, and length.{contact_info}
-        
-        CRITICAL: Preserve ALL template variables exactly as written: {{{{name}}}}, {{{{first_name}}}}, {{{{company}}}}, {{{{sender_name}}}}, etc. Do NOT modify or remove them.
-        CRITICAL: Do NOT add any new facts, claims, or information not present in the original.
-        CRITICAL: No citations, no footnotes, no bracketed numbers like [1] or [2].
-        DO NOT use HTML tags. Use plain line breaks.
-        Return ONLY the rewritten email body text, nothing else."""
-        
+        numbered_input = "\n\n".join(
+            f"EMAIL_{i+1}:\n{body}" for i, body in enumerate(bodies)
+        )
+
+        system = f"""You are an expert cold email copywriter. You will receive {len(bodies)} email bodies numbered EMAIL_1 through EMAIL_{len(bodies)}.
+
+For EACH email:
+- Rewrite so it sounds genuinely fresh (restructure sentences, synonyms, vary rhythm)
+- Change ~30% of wording while keeping the same meaning, intent, and length
+- CRITICAL: Preserve ALL template variables exactly as written: {{{{name}}}}, {{{{first_name}}}}, {{{{company}}}}, {{{{location}}}}, {{{{niche}}}}, {{{{sender_first_name}}}}, etc.
+- Do NOT add new facts or claims not in the original
+- No citations, no footnotes, no bracketed numbers like [1]
+- Plain text only, no HTML{contact_info}
+
+Return ONLY a JSON array of exactly {len(bodies)} strings, in the same order:
+["rewritten EMAIL_1 body", "rewritten EMAIL_2 body", ...]
+
+Return ONLY the raw JSON array. No markdown, no explanation."""
+
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model='gemini-2.5-pro',
-            contents=system + "\n\nText to Paraphrase:\n" + text,
+            model='gemini-2.0-flash',
+            contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
         )
-        
         content = response.text.strip()
-        # Clean up any markdown blocks if the AI ignored instructions
-        if '```html' in content: content = content.split('```html')[1].split('```')[0].strip()
+        if '```json' in content: content = content.split('```json')[1].split('```')[0].strip()
         elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
-        
-        return content
+
+        import json as _json
+        result = _json.loads(content)
+        if isinstance(result, list) and len(result) == len(bodies):
+            return [str(r) for r in result]
+        logger.warning(f"Batch paraphrase returned wrong count ({len(result)} vs {len(bodies)}), using originals")
+        return bodies
     except Exception as e:
-        logger.error(f"Paraphrase error (Gemini): {e}")
-        return text # fallback to original
+        logger.error(f"Batch paraphrase error: {e}")
+        return bodies  # fallback: originals
+
+
+def paraphrase_text(text: str, context: dict = None) -> str:
+    """Single-text wrapper around the batch function (kept for backward compat)."""
+    return paraphrase_texts_batch([text], context)[0]
 
 
 @app.route('/api/sequences/create', methods=['POST'])
@@ -856,100 +862,87 @@ def create_sequences():
             return jsonify({'error': 'No valid contacts found.'}), 400
             
         import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         def run_in_background(proj_id, contacts_data, templates_data):
             import re as _re
             import json as _json
-            
-            # Clean a business name: strip legal suffixes, Team/dash noise, trailing punctuation
+
             def _clean_biz_name(name):
                 if not name: return name
-                # Strip Team/Business suffix with optional dash before it
                 name = _re.sub(r'\s*[-\u2013]?\s*(Team|Business|Staff|Group|Page|Hub|Official)\s*$', '', name, flags=_re.IGNORECASE).strip()
-                # Strip common legal suffixes
                 name = _re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=_re.IGNORECASE).strip()
-                # Strip trailing dashes, pipes, commas
-                name = name.strip(' -|,').strip()
-                return name or name
+                return name.strip(' -|,').strip() or name
 
             def _shorten_company(name):
                 name = _clean_biz_name(name)
                 if not name: return name
                 words = name.split()
-                if len(words) > 4:
-                    name = ' '.join(words[:3])
-                return name
-            
-            created = 0
-            errors = 0
-            for contact in contacts_data:
+                return ' '.join(words[:3]) if len(words) > 4 else name
+
+            created_total = 0
+            errors_total = 0
+
+            def process_contact(contact):
+                """Process one contact: batch-paraphrase all steps, insert rows. Returns (created, errors)."""
+                created = 0
+                errors = 0
                 try:
                     base_date = datetime.utcnow()
-                    
-                    # Parse enrichment_data for LinkedIn fields
-                    enrichment_data = contact.get('enrichment_data')
+
+                    enrichment_data = contact.get('enrichment_data') or {}
                     if isinstance(enrichment_data, str):
-                        try:
-                            enrichment_data = _json.loads(enrichment_data)
-                        except Exception:
-                            enrichment_data = {}
-                    elif not isinstance(enrichment_data, dict):
-                        enrichment_data = {}
-                    
+                        try: enrichment_data = _json.loads(enrichment_data)
+                        except Exception: enrichment_data = {}
+
                     raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
-                    
                     full_name = contact.get('name', 'there')
-                    # Clean name: "Jasmine Spa - Team" → "Jasmine Spa" (strip dash + Team suffix)
                     clean_biz = _clean_biz_name(full_name)
-                    # {{first_name}} for greeting: clean biz name WITHOUT Team (e.g. "Jasmine Spa")
                     first_name = clean_biz if clean_biz else full_name
-                    # {{name}} for body: clean biz name + " Team" (mandatory, e.g. "Jasmine Spa Team")
                     display_name = (clean_biz + ' Team') if clean_biz else full_name
-                    
-                    # Strip any leftover [N] citations from stored icebreaker
+
                     raw_icebreaker = contact.get('icebreaker', '') or ''
                     clean_icebreaker = _re.sub(r'\[\d+\]', '', raw_icebreaker).strip()
-                    
+
                     variables = {
                         'name': display_name,
                         'first_name': first_name,
                         'bio': contact.get('bio', ''),
                         'icebreaker': clean_icebreaker,
                         'company': _shorten_company(raw_company),
-                        # Sender variables (from .env SENDER_NAME)
                         'sender_name': SENDER_NAME,
                         'sender_first_name': SENDER_NAME.split()[0] if SENDER_NAME else '',
-                        # GrowthScout location + niche (for template variables and paraphrase context)
-                        'location': enrichment_data.get('location') or enrichment_data.get('search_location') or '',
-                        'niche': enrichment_data.get('niche') or enrichment_data.get('category') or contact.get('source') or '',
-                        # LinkedIn enrichment fields for paraphraser context
+                        'location': enrichment_data.get('location') or enrichment_data.get('search_location') or contact.get('location') or '',
+                        'niche': enrichment_data.get('niche') or enrichment_data.get('category') or contact.get('niche') or contact.get('source') or '',
                         'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
                         'linkedin_company': enrichment_data.get('linkedin_company', ''),
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
                         'linkedin_about': enrichment_data.get('linkedin_about', ''),
                     }
-                    
-                    for template in templates_data:
+
+                    # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
+                    bodies_raw = [t['body_template'] for t in templates_data]
+                    bodies_para = paraphrase_texts_batch(bodies_raw, context=variables)
+
+                    for i, template in enumerate(templates_data):
                         try:
+                            # Dedup check
+                            existing = supabase.table('email_sequences').select('id') \
+                                .eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
+                            if existing.data:
+                                logger.info(f"Skipping duplicate: contact {contact['id']} template {template['id']}")
+                                continue
+
                             subject = template['subject_template']
-                            body = template['body_template']
-                            
-                            # Paraphrase EVERY step per contact for spam avoidance
-                            body = paraphrase_text(body, context=variables)
-                            
+                            body = bodies_para[i]  # already paraphrased, index-safe
+
                             for key, val in variables.items():
                                 val_str = str(val) if val is not None else ''
                                 subject = subject.replace(f'{{{{{key}}}}}', val_str)
                                 body = body.replace(f'{{{{{key}}}}}', val_str)
-                            
+
                             scheduled = base_date + timedelta(days=template.get('delay_days', 0))
-                            
-                            # Dedup check: skip if sequence row already exists for this contact+template
-                            existing = supabase.table('email_sequences').select('id').eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
-                            if existing.data:
-                                logger.info(f"Skipping duplicate sequence for contact {contact['id']} template {template['id']}")
-                                continue
-                            
+
                             supabase.table('email_sequences').insert({
                                 'project_id': proj_id,
                                 'contact_id': contact['id'],
@@ -960,29 +953,37 @@ def create_sequences():
                                 'status': 'pending',
                                 'scheduled_at': scheduled.isoformat()
                             }).execute()
-                            
                             created += 1
                         except Exception as step_e:
-                            logger.error(f"Error on step {template.get('step_number')} for contact {contact.get('name')}: {step_e}")
-                    
-                    # Update contact status
+                            logger.error(f"Step {template.get('step_number')} for {contact.get('name')}: {step_e}")
+                            errors += 1
+
                     supabase.table('contacts').update({
                         'status': 'in_sequence',
                         'updated_at': datetime.utcnow().isoformat()
                     }).eq('id', contact['id']).execute()
                     logger.info(f"Sequence created for contact: {contact.get('name')}")
-                    
+
                 except Exception as contact_e:
                     errors += 1
-                    logger.error(f"Failed to create sequence for contact {contact.get('name', contact.get('id'))}: {contact_e}")
-                    # Continue to next contact regardless
-                    continue
-            
-            logger.info(f"Background sequence creation done: {created} steps created, {errors} contact errors")
+                    logger.error(f"Failed for {contact.get('name', contact.get('id'))}: {contact_e}")
 
-        # Start thread (daemon=False ensures it outlives the request)
-        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data), daemon=False)
-        thread.start()
+                return created, errors
+
+            # ── PARALLEL: process up to 10 contacts concurrently ──
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                futures = {pool.submit(process_contact, c): c for c in contacts_data}
+                for fut in as_completed(futures):
+                    try:
+                        c, e = fut.result()
+                        created_total += c
+                        errors_total += e
+                    except Exception as ex:
+                        errors_total += 1
+                        logger.error(f"Future error: {ex}")
+
+            logger.info(f"Sequence creation done: {created_total} steps created, {errors_total} errors")
+
         
         return jsonify({
             'message': f'Started generating sequences for {len(contacts.data)} contacts in the background.',
