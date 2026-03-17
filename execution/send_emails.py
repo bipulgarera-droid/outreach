@@ -36,8 +36,8 @@ DELAY_MIN = int(os.getenv('DELAY_MIN_SECONDS', 45))
 DELAY_MAX = int(os.getenv('DELAY_MAX_SECONDS', 90))
 
 
-def send_pending_emails(limit: int = 50, dry_run: bool = False) -> dict:
-    """Send all pending emails where scheduled_at <= now()."""
+def send_pending_emails(limit: int = 50, dry_run: bool = False, project_id: str = None) -> dict:
+    """Send all pending emails where scheduled_at <= now(). Filters by project_id if provided."""
     
     # Init Supabase
     from supabase import create_client
@@ -59,13 +59,15 @@ def send_pending_emails(limit: int = 50, dry_run: bool = False) -> dict:
 
     # Fetch pending sequences due for sending
     now = datetime.utcnow().isoformat()
-    result = supabase.table('email_sequences') \
+    query = supabase.table('email_sequences') \
         .select('*, contacts(name, email)') \
         .eq('status', 'pending') \
         .lte('scheduled_at', now) \
-        .limit(limit) \
-        .order('scheduled_at') \
-        .execute()
+        
+    if project_id:
+        query = query.eq('project_id', project_id)
+        
+    result = query.limit(limit).order('scheduled_at').execute()
     
     sequences = result.data or []
     logger.info(f"Found {len(sequences)} emails ready to send")
@@ -145,11 +147,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Send pending drip campaign emails using multi-account SMTP')
     parser.add_argument('--limit', type=int, default=50, help='Max emails to send')
     parser.add_argument('--dry-run', action='store_true', help='Preview without sending')
+    parser.add_argument('--project-id', type=str, help='Restrict sending to a specific project ID')
     
     args = parser.parse_args()
     
     # Use DRY_RUN from env if flag is not set manually
     dry_run = args.dry_run or str(os.getenv('DRY_RUN', 'false')).lower() == 'true'
     
-    stats = send_pending_emails(limit=args.limit, dry_run=dry_run)
+    stats = send_pending_emails(limit=args.limit, dry_run=dry_run, project_id=args.project_id)
     print(json.dumps(stats, indent=2))

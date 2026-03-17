@@ -36,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def daily_run(limit: int = 250, dry_run: bool = False, delay_min: int = 20, delay_max: int = 40) -> dict:
+def daily_run(limit: int = 250, dry_run: bool = False, delay_min: int = 20, delay_max: int = 40, project_id: str = None) -> dict:
     """
     Execute the full daily workflow:
     1. Check for replies (IMAP)
@@ -83,7 +83,7 @@ def daily_run(limit: int = 250, dry_run: bool = False, delay_min: int = 20, dela
         os.environ['DELAY_MAX_SECONDS'] = str(delay_max)
 
         from execution.send_emails import send_pending_emails
-        send_stats = send_pending_emails(limit=limit, dry_run=dry_run)
+        send_stats = send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id)
         results['email_send'] = send_stats
 
         sent = send_stats.get('sent', 0)
@@ -122,6 +122,8 @@ if __name__ == '__main__':
                         help='Max seconds between emails (default: 40)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Preview without actually sending')
+    parser.add_argument('--project-id', type=str,
+                        help='Restrict sending to a specific project ID')
 
     args = parser.parse_args()
 
@@ -131,6 +133,7 @@ if __name__ == '__main__':
         limit=args.limit,
         dry_run=dry_run,
         delay_min=args.delay_min,
-        delay_max=args.delay_max
+        delay_max=args.delay_max,
+        project_id=args.project_id
     )
     print("\n" + json.dumps(stats, indent=2))

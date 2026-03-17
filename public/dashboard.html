@@ -170,7 +170,17 @@
                 </div>
             </div>
             <nav class="flex items-center gap-1" id="topTabs"></nav>
-            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4 border-r border-gray-700 pr-4">
+                    <div class="flex flex-col items-end">
+                        <span class="text-xs text-gray-400 font-medium">Daily Send Capacity</span>
+                        <div class="flex items-center gap-2">
+                            <span id="smtpCapacityText" class="text-sm font-bold text-white">-- / --</span>
+                            <div class="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div id="smtpCapacityBar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <button onclick="showSearchModal()"
                     class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                     <i data-lucide="search" class="w-4 h-4"></i>
@@ -333,6 +343,33 @@
                 document.getElementById('contentArea').innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Please select or create a project first.</div>';
             }
             lucide.createIcons();
+            
+            // Fetch initial capacity and set up interval
+            fetchSmtpCapacity();
+            setInterval(fetchSmtpCapacity, 60000); // Update every minute
+        }
+
+        async function fetchSmtpCapacity() {
+            try {
+                const res = await fetch('/api/smtp-capacity');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const textEl = document.getElementById('smtpCapacityText');
+                const barEl = document.getElementById('smtpCapacityBar');
+                
+                if (textEl && barEl) {
+                    textEl.textContent = `${data.used} / ${data.limit}`;
+                    const pct = data.limit > 0 ? Math.min(100, (data.used / data.limit) * 100) : 0;
+                    barEl.style.width = `${pct}%`;
+                    
+                    if (pct > 90) barEl.className = "h-full bg-red-500 transition-all duration-500";
+                    else if (pct > 75) barEl.className = "h-full bg-amber-500 transition-all duration-500";
+                    else barEl.className = "h-full bg-emerald-500 transition-all duration-500";
+                }
+            } catch (e) {
+                console.error("Failed to fetch SMTP capacity", e);
+            }
         }
 
         async function loadProjects() {
@@ -1497,7 +1534,7 @@
                 const res = await fetch('/api/daily-run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ limit: 250, dry_run: false })
+                    body: JSON.stringify({ limit: 250, dry_run: false, project_id: currentProjectId })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -1521,7 +1558,7 @@
                                 <div class="text-xs text-gray-500 mt-1">Replies Found</div>
                             </div>
                         </div>
-                        <button onclick="closeModal(); loadContent();" class="mt-6 w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium py-2 rounded-lg">Done</button>
+                        <button onclick="closeModal(); loadContent(); fetchSmtpCapacity();" class="mt-6 w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium py-2 rounded-lg">Done</button>
                     </div>
                 `);
             } catch (e) {

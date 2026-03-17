@@ -1073,9 +1073,10 @@ def trigger_send():
         data = request.json or {}
         limit = data.get('limit', 50)
         dry_run = data.get('dry_run', False)
+        project_id = data.get('project_id')
         
         from execution.send_emails import send_pending_emails
-        stats = send_pending_emails(limit=limit, dry_run=dry_run)
+        stats = send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id)
         
         return jsonify(stats)
     except Exception as e:
@@ -1106,14 +1107,48 @@ def trigger_daily_run():
         data = request.json or {}
         limit = data.get('limit', 250)
         dry_run = data.get('dry_run', False)
+        project_id = data.get('project_id')
 
         from execution.daily_run import daily_run
-        stats = daily_run(limit=limit, dry_run=dry_run)
+        stats = daily_run(limit=limit, dry_run=dry_run, project_id=project_id)
 
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Daily run error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/smtp-capacity', methods=['GET'])
+def get_smtp_capacity():
+    """Get today's total SMTP capacity and usage."""
+    try:
+        from execution.smtp_pool import SMTPPool, get_today_str
+        
+        # We need to know how many accounts we loaded to calculate max
+        try:
+            pool = SMTPPool()
+            account_count = len(pool.accounts)
+            max_capacity = account_count * pool.accounts[0].__class__.max_per_day if account_count > 0 else 0
+            
+            # Since the pool object is ephemeral per request, we can just grab MAX_PER_DAY globally
+            from execution.smtp_pool import MAX_PER_DAY
+            max_capacity = account_count * MAX_PER_DAY
+        except Exception:
+            # If pool fails to load (e.g. no env vars)
+            return jsonify({'used': 0, 'limit': 0})
+
+        today = get_today_str()
+        res = supabase.table('smtp_daily_stats').select('sent_count').eq('date', today).execute()
+        
+        used_capacity = sum(row.get('sent_count', 0) for row in (res.data or []))
+        
+        return jsonify({
+            'used': used_capacity,
+            'limit': max_capacity
+        })
+    except Exception as e:
+        logger.error(f"Error fetching smtp capacity: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 # =============================================================================
 # ROUTES — Search Runs

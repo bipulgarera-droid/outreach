@@ -12,15 +12,30 @@ import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
+import json
 from typing import Optional
 import logging
+from supabase import create_client, Client
+
+logger = logging.getLogger(__name__)
+
+# Initialize Supabase client
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    logger.warning("Supabase credentials missing. Daily stats tracking may fail.")
+    supabase: Optional[Client] = None
+else:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
-MAX_PER_DAY = int(os.getenv("MAX_PER_ACCOUNT_PER_DAY", 150))
-MAX_PER_HOUR = int(os.getenv("MAX_PER_ACCOUNT_PER_HOUR", 20))
+MAX_PER_DAY = int(os.getenv("MAX_PER_ACCOUNT_PER_DAY", 60)) # Default to 60 as per requirements
+
+def get_today_str() -> str:
+    return datetime.now().strftime('%Y-%m-%d')
 
 
 def _load_accounts_from_env() -> list[dict]:
@@ -41,26 +56,58 @@ class GmailAccount:
         self.email = email
         self.app_password = app_password
         self.disabled = False
-        self.send_log: list[datetime] = []
+        self._sends_today_cache = 0
+        self._last_cache_update = None
+        
+    def _fetch_sends_today(self) -> int:
+        if not supabase: return 0
+        
+        today = get_today_str()
+        try:
+            res = supabase.table('smtp_daily_stats').select('sent_count').eq('email_address', self.email).eq('date', today).execute()
+            if res.data:
+                return res.data[0].get('sent_count', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error fetching stats for {self.email}: {e}")
+            return 0
 
     @property
     def sends_today(self) -> int:
-        cutoff = datetime.now() - timedelta(hours=24)
-        return sum(1 for t in self.send_log if t > cutoff)
-
-    @property
-    def sends_this_hour(self) -> int:
-        cutoff = datetime.now() - timedelta(hours=1)
-        return sum(1 for t in self.send_log if t > cutoff)
+        # Cache the result briefly to avoid rapid-fire DB hits while looping
+        now = datetime.now()
+        if self._last_cache_update is None or (now - self._last_cache_update).total_seconds() > 60:
+            self._sends_today_cache = self._fetch_sends_today()
+            self._last_cache_update = now
+        return self._sends_today_cache
 
     @property
     def can_send(self) -> bool:
-        return (not self.disabled and 
-                self.sends_today < MAX_PER_DAY and 
-                self.sends_this_hour < MAX_PER_HOUR)
+        return (not self.disabled and self.sends_today < MAX_PER_DAY)
 
     def record_send(self):
-        self.send_log.append(datetime.now())
+        self._sends_today_cache += 1
+        self._last_cache_update = datetime.now()
+        
+        if not supabase: return
+        today = get_today_str()
+        
+        try:
+            # Check if record exists
+            res = supabase.table('smtp_daily_stats').select('id, sent_count').eq('email_address', self.email).eq('date', today).execute()
+            if res.data:
+                # Update
+                new_count = res.data[0]['sent_count'] + 1
+                supabase.table('smtp_daily_stats').update({'sent_count': new_count, 'updated_at': datetime.now().isoformat()}).eq('id', res.data[0]['id']).execute()
+            else:
+                # Insert
+                supabase.table('smtp_daily_stats').insert({
+                    'email_address': self.email,
+                    'date': today,
+                    'sent_count': 1
+                }).execute()
+        except Exception as e:
+            logger.error(f"Failed to record send for {self.email}: {e}")
 
 
 class SMTPPool:
@@ -136,6 +183,6 @@ class SMTPPool:
             stats[acc.email] = {
                 'status': status,
                 'sends_today': acc.sends_today,
-                'sends_this_hour': acc.sends_this_hour
+                'max_per_day': MAX_PER_DAY
             }
         return stats
