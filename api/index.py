@@ -1132,8 +1132,9 @@ def get_smtp_capacity():
             # Since the pool object is ephemeral per request, we can just grab MAX_PER_DAY globally
             from execution.smtp_pool import MAX_PER_DAY
             max_capacity = account_count * MAX_PER_DAY
-        except Exception:
+        except Exception as e:
             # If pool fails to load (e.g. no env vars)
+            logger.warning(f"Error loading SMTPPool for capacity check: {e}")
             return jsonify({'used': 0, 'limit': 0})
 
         today = get_today_str()
