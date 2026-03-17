@@ -984,7 +984,11 @@ def create_sequences():
 
             logger.info(f"Sequence creation done: {created_total} steps created, {errors_total} errors")
 
-        
+
+        # Launch background thread (daemon=False so it outlives the request)
+        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data), daemon=False)
+        thread.start()
+
         return jsonify({
             'message': f'Started generating sequences for {len(contacts.data)} contacts in the background.',
             'status': 'processing'
