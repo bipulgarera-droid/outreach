@@ -71,21 +71,21 @@ class GmailAccount:
         self.credentials = self._build_credentials()
         self.service = build('gmail', 'v1', credentials=self.credentials, cache_discovery=False)
         
-    def _build_credentials(self) -> Credentials:
-        from pathlib import Path
-        import json
+        # Instead of loading credentials.json, we load the non-sensitive client ID and Secret from .env
+        # This allows the app to run on Railway without tracking credentials.json in Git,
+        # and satisfies GitHub Push Protection.
+        client_id = os.getenv("GMAIL_CLIENT_ID")
+        client_secret = os.getenv("GMAIL_CLIENT_SECRET")
         
-        # Load the client config we copied to credentials.json
-        cred_path = Path(__file__).resolve().parent.parent / 'credentials.json'
-        with open(cred_path, 'r') as f:
-            client_config = json.load(f)["installed"]
-        
+        if not client_id or not client_secret:
+            logger.error("Missing GMAIL_CLIENT_ID or GMAIL_CLIENT_SECRET in environment!")
+            
         return Credentials(
             token=None,
             refresh_token=self.refresh_token,
-            token_uri=client_config["token_uri"],
-            client_id=client_config["client_id"],
-            client_secret=client_config["client_secret"]
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret
         )
         
     def _fetch_sends_rolling_24h(self) -> int:

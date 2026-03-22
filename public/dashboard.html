@@ -1777,15 +1777,26 @@
                 if (data.error) throw new Error(data.error);
 
                 // Start progress polling
-                _pollTaskProgress({ type: 'daily-run', projectId: currentProjectId });
+                _pollTaskProgress({ 
+                    type: 'daily-run', 
+                    projectId: currentProjectId,
+                    onComplete: () => {
+                        if (btn) {
+                            btn.innerHTML = origHtml;
+                            btn.disabled = false;
+                            if (window.lucide) window.lucide.createIcons();
+                        }
+                    }
+                });
                 showToast('🚀 Daily sequence run started in the background!');
             } catch (e) {
                 showToast('❌ Daily run error: ' + e.message);
-            } finally {
-                btn.innerHTML = origHtml;
-                btn.disabled = false;
-                if (window.lucide) window.lucide.createIcons();
-            }
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            } 
         }
 
         async function sendSelectedSequences() {
@@ -2015,7 +2026,8 @@
                 targetIds,      // for enrichment
                 total,          // total count
                 projectId,
-                intervalMs = 3000 
+                intervalMs = 3000,
+                onComplete
             } = options;
 
             const bannerId = `taskProgressBanner_${type}`;
@@ -2058,10 +2070,13 @@
                         const { count: pending } = await supabase.from('email_sequences').select('id', { count: 'exact', head: true })
                             .eq('project_id', projectId).eq('status', 'pending');
                         
-                        // This is a rough estimate: we assume "total" is what we started with
-                        // But since we don't know exactly, we'll just show the count.
-                        completed = sent || 0;
-                        currentTotal = (sent || 0) + (pending || 0);
+                        if (pending === 0) {
+                            completed = 1;
+                            currentTotal = 1;
+                        } else {
+                            completed = sent || 0;
+                            currentTotal = (sent || 0) + (pending || 0);
+                        }
                     } else if (type === 'icebreaker') {
                         const { data } = await supabase.from('contacts').select('id, icebreaker').eq('project_id', projectId);
                         completed = (data || []).filter(c => c.icebreaker && c.icebreaker.length > 10).length;
@@ -2096,8 +2111,9 @@
                                 <span class="text-sm font-semibold">${type.replace('-', ' ').toUpperCase()} Complete</span>
                             </div>
                         `;
-                        if (window.lucide) lucide.createIcons();
+                        if (window.lucide) window.lucide.createIcons();
                         setTimeout(() => banner.remove(), 5000);
+                        if (onComplete) onComplete();
                         loadContent();
                     }
                 } catch (e) {
