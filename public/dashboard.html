@@ -873,8 +873,8 @@
                                             <div class="text-xs text-gray-500">${s.contact_email || '—'}</div>
                                         </td>
                                         <td class="px-4 py-3" onclick="event.stopPropagation()">
-                                            ${s.clean_ig
-                                                ? `<a href="https://instagram.com/${s.clean_ig}" target="_blank" class="text-pink-400 hover:text-pink-300 text-xs font-medium flex items-center gap-1 hover:underline"><i data-lucide="instagram" class="w-3.5 h-3.5"></i> @${s.clean_ig}</a>`
+                                            ${s.ig_url
+                                                ? `<a href="${s.ig_url}" target="_blank" class="text-pink-400 hover:text-pink-300 text-xs font-medium flex items-center gap-1 hover:underline"><i data-lucide="instagram" class="w-3.5 h-3.5"></i> @${s.clean_ig}</a>`
                                                 : '<span class="text-gray-600 text-xs">—</span>'
                                             }
                                         </td>
@@ -903,7 +903,7 @@
                                                 ${s.contact_email ? `<button id="btn-email-${s.id}" onclick="toggleChannelDone('${s.id}', 'email', this)" class="${getChannelBtnClass(s.manual_channel, 'email')}">✉ Email</button>` : ''}
                                                 ${s.clean_phone ? `<a href="https://wa.me/${s.clean_phone}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 transition-colors">📱 WA</a>` : ''}
                                                 <button id="btn-wa-${s.id}" onclick="toggleChannelDone('${s.id}', 'wa', this)" class="${getChannelBtnClass(s.manual_channel, 'wa')}">✓ WA Done</button>
-                                                ${s.clean_ig ? `<a href="https://instagram.com/${s.clean_ig}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 transition-colors">📷 IG</a>` : ''}
+                                                ${s.ig_url ? `<a href="${s.ig_url}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 transition-colors">📷 IG</a>` : ''}
                                                 <button id="btn-ig-${s.id}" onclick="toggleChannelDone('${s.id}', 'ig', this)" class="${getChannelBtnClass(s.manual_channel, 'ig')}">✓ IG Done</button>
                                                 <button onclick="markSnapshotDone('${s.id}', 'sent', null, this)" class="text-xs px-4 py-1 bg-violet-600 hover:bg-violet-500 text-white border border-violet-500 rounded font-medium shadow-sm transition-all">Finish Task</button>
                                                 <button onclick="markSnapshotDone('${s.id}', 'replied', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-amber-600 border border-gray-700 rounded hover:bg-amber-900/40 hover:text-amber-400 transition-colors ml-2">↩ Replied</button>

@@ -271,15 +271,21 @@ def daily_snapshot():
             ig_handle = contact.get('instagram') or enrichment.get('instagram') or enrichment.get('instagram_handle')
             if ig_handle:
                 ig_str = str(ig_handle).strip().rstrip('/')
-                # Strip full URL down to just the handle
-                for prefix in ['https://www.instagram.com/', 'http://www.instagram.com/', 'https://instagram.com/', 'http://instagram.com/', 'www.instagram.com/', 'instagram.com/']:
-                    if ig_str.lower().startswith(prefix):
-                        ig_str = ig_str[len(prefix):]
-                        break
-                # Also strip /p/XXXX post links — extract nothing useful
-                clean_ig = ig_str.replace('@', '').strip().rstrip('/') if ig_str and not ig_str.startswith('p/') else None
+                is_full_url = ig_str.lower().startswith('http') or ig_str.lower().startswith('www.')
+                if is_full_url:
+                    ig_url = ig_str if ig_str.startswith('http') else f'https://{ig_str}'
+                    # Extract handle for display
+                    for prefix in ['https://www.instagram.com/', 'http://www.instagram.com/', 'https://instagram.com/', 'http://instagram.com/']:
+                        if ig_str.lower().startswith(prefix):
+                            ig_str = ig_str[len(prefix):]
+                            break
+                    clean_ig = ig_str.rstrip('/').replace('@', '') if ig_str else None
+                else:
+                    clean_ig = ig_str.replace('@', '').strip()
+                    ig_url = f'https://instagram.com/{clean_ig}'
             else:
                 clean_ig = None
+                ig_url = None
             
             scheduled = step.get('scheduled_at', '')
             is_overdue = bool(scheduled) and scheduled < today_str
@@ -301,6 +307,7 @@ def daily_snapshot():
                 'contact_email': contact.get('email'),
                 'clean_phone': clean_phone,
                 'clean_ig': clean_ig,
+                'ig_url': ig_url,
                 'manual_channel': step.get('manual_channel') or '',
             })
         
