@@ -98,14 +98,21 @@ def list_projects_with_stats():
     """List all projects with lead counts."""
     try:
         projects = supabase.table('projects').select('*').order('created_at', desc=True).execute()
+        # Single query: fetch all contact project_ids and count in Python
+        contacts = supabase.table('contacts').select('project_id').execute()
+        lead_counts = {}
+        for c in (contacts.data or []):
+            pid = c.get('project_id')
+            if pid:
+                lead_counts[pid] = lead_counts.get(pid, 0) + 1
+        
         result = []
         for p in (projects.data or []):
-            count_res = supabase.table('contacts').select('id', count='exact').eq('project_id', p['id']).execute()
             result.append({
                 'id': p['id'],
                 'name': p.get('name', ''),
                 'created_at': p.get('created_at', ''),
-                'lead_count': count_res.count if count_res.count is not None else 0
+                'lead_count': lead_counts.get(p['id'], 0)
             })
         return jsonify({'projects': result})
     except Exception as e:
