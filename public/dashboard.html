@@ -859,6 +859,7 @@
                                 <thead>
                                     <tr class="border-b border-gray-800 text-gray-500 text-xs">
                                         <th class="text-left px-4 py-2 font-medium">Contact</th>
+                                        <th class="text-left px-4 py-2 font-medium">Instagram</th>
                                         <th class="text-left px-4 py-2 font-medium">Step</th>
                                         <th class="text-left px-4 py-2 font-medium">Scheduled</th>
                                         <th class="text-left px-4 py-2 font-medium">Actions</th>
@@ -870,6 +871,12 @@
                                         <td class="px-4 py-3">
                                             <div class="font-medium text-white">${s.contact_name || '—'}</div>
                                             <div class="text-xs text-gray-500">${s.contact_email || '—'}</div>
+                                        </td>
+                                        <td class="px-4 py-3" onclick="event.stopPropagation()">
+                                            ${s.clean_ig
+                                                ? `<a href="https://instagram.com/${s.clean_ig}" target="_blank" class="text-pink-400 hover:text-pink-300 text-xs font-medium flex items-center gap-1 hover:underline"><i data-lucide="instagram" class="w-3.5 h-3.5"></i> @${s.clean_ig}</a>`
+                                                : '<span class="text-gray-600 text-xs">—</span>'
+                                            }
                                         </td>
                                         <td class="px-4 py-3">
                                             <div class="text-gray-300 font-medium">${s.subject || '—'}</div>
