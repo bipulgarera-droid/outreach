@@ -139,6 +139,133 @@
             border-radius: 4px;
             transition: width 0.5s ease;
         }
+
+        /* ── Hamburger button: hidden on desktop ── */
+        .mobile-hamburger { display: none; }
+
+        /* ── Mobile sidebar overlay backdrop ── */
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 40;
+        }
+        .sidebar-backdrop.open { display: block; }
+
+        /* ── MOBILE RESPONSIVE ── */
+        @media (max-width: 768px) {
+            html { font-size: 12px; }
+
+            /* Show hamburger */
+            .mobile-hamburger {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px; height: 36px;
+                background: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 8px;
+                color: #d1d5db;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+
+            /* Hide top tabs, capacity meter, new search button on mobile header */
+            #topTabs { display: none !important; }
+            header .border-r.border-gray-700 { display: none !important; }
+            header button[onclick="showSearchModal()"] { display: none !important; }
+
+            /* Sidebar: hidden by default, shown as full-height overlay */
+            aside.w-48 {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                z-index: 45;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                width: 240px;
+            }
+            aside.w-48.sidebar-open {
+                transform: translateX(0);
+            }
+
+            /* Sub-header bar */
+            .h-12.bg-gray-900\/50 {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            /* Content area: less padding */
+            #contentArea {
+                padding: 12px !important;
+            }
+
+            /* Stat cards: 2 per row */
+            .grid.grid-cols-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            /* Dashboard panels: stack */
+            .grid.grid-cols-2 {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Pipeline: 2 per row */
+            .grid.grid-cols-5 {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            /* Quick action buttons: 2 per row */
+            .grid.grid-cols-4.gap-3 {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            /* Tables: horizontal scroll */
+            .bg-gray-900.border.border-gray-800.rounded-xl.overflow-hidden {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .bg-gray-900.border.border-gray-800.rounded-xl.overflow-hidden table {
+                min-width: 700px;
+            }
+
+            /* Action button rows: wrap */
+            #pageActions .flex.items-center.gap-2 {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            #pageActions .flex.items-center.gap-2 input[type="text"] {
+                width: 100% !important;
+                max-width: none !important;
+            }
+
+            /* Modal: full width on mobile */
+            #modalContent {
+                max-width: calc(100vw - 24px) !important;
+                margin: 12px;
+            }
+
+            /* Template cards: stack header items */
+            #templates-container .flex.items-center.justify-between.mb-4 {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            #templates-container .flex.items-center.gap-4.text-sm {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            /* Sequence action buttons: wrap */
+            #pageActions .flex.items-center.gap-2 button,
+            #pageActions .flex.items-center.gap-2 a {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+
+            /* Pipeline chevrons: hide on mobile */
+            .grid.grid-cols-5 .absolute.-right-2 { display: none !important; }
+        }
     </style>
 </head>
 
@@ -148,6 +275,10 @@
     <header class="bg-gray-900 border-b border-gray-800 shrink-0">
         <div class="flex items-center justify-between px-4 h-12">
             <div class="flex items-center gap-4">
+                <!-- Mobile Hamburger (hidden on desktop via CSS) -->
+                <button class="mobile-hamburger" onclick="toggleMobileSidebar()" aria-label="Menu">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
                 <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.reload()">
                     <div class="bg-gradient-to-r from-violet-600 to-indigo-600 p-1.5 rounded-lg">
                         <i data-lucide="zap" class="w-4 h-4 text-white"></i>
@@ -190,10 +321,13 @@
         </div>
     </header>
 
+    <!-- Sidebar Backdrop (mobile only) -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleMobileSidebar()"></div>
+
     <!-- Main Layout -->
     <div class="flex-1 flex overflow-hidden">
         <!-- Left Sidebar -->
-        <aside class="w-48 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
+        <aside id="mainSidebar" class="w-48 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
             <div class="p-3 border-b border-gray-800">
                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider" id="sidebarTitle">Dashboard</p>
             </div>
@@ -243,6 +377,14 @@
         // =========================================================================
         let currentTopTab = 'dashboard';
         let currentProjectId = localStorage.getItem('currentProjectId') || null;
+
+        // ── Mobile sidebar toggle ──
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('mainSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('sidebar-open');
+            backdrop.classList.toggle('open');
+        }
 
         /** Copy text to clipboard with feedback */
         async function copyToClipboard(text, btnElement) {
@@ -523,12 +665,31 @@
             const c = document.getElementById('sideTabs');
             const tabs = SIDE_TABS[currentTopTab] || [];
             document.getElementById('sidebarTitle').textContent = TOP_TABS.find(t => t.id === currentTopTab)?.label || '';
-            c.innerHTML = tabs.map(t => `
-                <button onclick="switchSideTab('${t.id}')"
+
+            // On mobile: also render top-level tabs in the sidebar so users can navigate
+            const isMobile = window.innerWidth <= 768;
+            let topTabsHtml = '';
+            if (isMobile) {
+                topTabsHtml = `
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 pt-2 pb-1">Sections</p>
+                    ${TOP_TABS.map(t => `
+                        <button onclick="switchTopTab('${t.id}'); toggleMobileSidebar();"
+                            class="side-tab w-full text-left text-sm text-gray-400 rounded transition-colors flex items-center gap-2 ${t.id === currentTopTab ? 'active' : ''}">
+                            <i data-lucide="${t.icon}" class="w-4 h-4"></i> ${t.label}
+                        </button>
+                    `).join('')}
+                    <div class="border-t border-gray-800 my-2"></div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 pb-1">Views</p>
+                `;
+            }
+
+            c.innerHTML = topTabsHtml + tabs.map(t => `
+                <button onclick="switchSideTab('${t.id}')${isMobile ? '; toggleMobileSidebar()' : ''}"
                     class="side-tab w-full text-left text-sm text-gray-400 rounded transition-colors ${t.id === currentSideTab ? 'active' : ''}">
                     ${t.label}
                 </button>
             `).join('');
+            if (isMobile && window.lucide) lucide.createIcons();
         }
 
         function switchTopTab(id) {
