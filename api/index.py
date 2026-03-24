@@ -125,6 +125,8 @@ def delete_project(project_id):
     try:
         # Delete sequences for contacts in this project
         supabase.table('email_sequences').delete().eq('project_id', project_id).execute()
+        # Delete email templates
+        supabase.table('email_templates').delete().eq('project_id', project_id).execute()
         # Delete contacts
         supabase.table('contacts').delete().eq('project_id', project_id).execute()
         # Delete the project itself

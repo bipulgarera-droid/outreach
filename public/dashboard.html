@@ -177,10 +177,16 @@
                 flex-shrink: 0;
             }
 
-            /* Hide top tabs, capacity meter, new search button on mobile header */
+            /* Hide top tabs and new search button on mobile header — keep capacity visible */
             #topTabs { display: none !important; }
-            header .border-r.border-gray-700 { display: none !important; }
             header button[onclick="showSearchModal()"] { display: none !important; }
+            /* Compact the capacity meter on mobile */
+            header .border-r.border-gray-700 {
+                border-right: none !important;
+                padding-right: 0 !important;
+            }
+            header .border-r.border-gray-700 .text-xs { font-size: 10px !important; }
+            header .border-r.border-gray-700 .text-sm { font-size: 12px !important; }
 
             /* Sidebar: hidden by default, shown as full-height overlay */
             aside.w-48 {
