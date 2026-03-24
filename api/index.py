@@ -98,13 +98,19 @@ def list_projects_with_stats():
     """List all projects with lead counts."""
     try:
         projects = supabase.table('projects').select('*').order('created_at', desc=True).execute()
-        # Single query: fetch all contact project_ids and count in Python
-        contacts = supabase.table('contacts').select('project_id').execute()
+        # Single query: fetch contact project_ids, email, instagram and count in Python
+        contacts = supabase.table('contacts').select('project_id, email, instagram').execute()
         lead_counts = {}
+        email_counts = {}
+        ig_counts = {}
         for c in (contacts.data or []):
             pid = c.get('project_id')
             if pid:
                 lead_counts[pid] = lead_counts.get(pid, 0) + 1
+                if c.get('email'):
+                    email_counts[pid] = email_counts.get(pid, 0) + 1
+                if c.get('instagram'):
+                    ig_counts[pid] = ig_counts.get(pid, 0) + 1
         
         result = []
         for p in (projects.data or []):
@@ -112,11 +118,27 @@ def list_projects_with_stats():
                 'id': p['id'],
                 'name': p.get('name', ''),
                 'created_at': p.get('created_at', ''),
-                'lead_count': lead_counts.get(p['id'], 0)
+                'lead_count': lead_counts.get(p['id'], 0),
+                'email_count': email_counts.get(p['id'], 0),
+                'ig_count': ig_counts.get(p['id'], 0)
             })
         return jsonify({'projects': result})
     except Exception as e:
         logger.error(f"Projects with stats error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/projects/<project_id>', methods=['PATCH'])
+def update_project(project_id):
+    """Rename a project."""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Name cannot be empty'}), 400
+        supabase.table('projects').update({'name': name}).eq('id', project_id).execute()
+        return jsonify({'success': True, 'name': name})
+    except Exception as e:
+        logger.error(f"Update project error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/projects/<project_id>', methods=['DELETE'])

@@ -2016,9 +2016,6 @@
         }
 
         // =========================================================================
-        // SETTINGS
-        // =========================================================================
-        // =========================================================================
         // PROJECTS
         // =========================================================================
         async function loadProjectsTab(area) {
@@ -2034,6 +2031,8 @@
                                 <th class="text-left px-4 py-3 font-medium">Project Name</th>
                                 <th class="text-left px-4 py-3 font-medium">Date Added</th>
                                 <th class="text-left px-4 py-3 font-medium">Leads</th>
+                                <th class="text-left px-4 py-3 font-medium">With Email</th>
+                                <th class="text-left px-4 py-3 font-medium">With IG</th>
                                 <th class="text-right px-4 py-3 font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -2041,21 +2040,31 @@
                             ${projects.length ? projects.map(p => `
                                 <tr id="proj-row-${p.id}" class="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30">
                                     <td class="px-4 py-3">
-                                        <span class="font-medium text-white">${p.name || '—'}</span>
+                                        <span id="proj-name-${p.id}" class="font-medium text-white">${p.name || '\u2014'}</span>
+                                        <button onclick="renameProject('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
+                                            class="ml-2 text-gray-500 hover:text-violet-400 transition-colors" title="Rename">
+                                            <i data-lucide="pencil" class="w-3 h-3 inline"></i>
+                                        </button>
                                     </td>
-                                    <td class="px-4 py-3 text-gray-400">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+                                    <td class="px-4 py-3 text-gray-400">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '\u2014'}</td>
                                     <td class="px-4 py-3">
                                         <span class="bg-violet-900/40 text-violet-300 text-xs px-2 py-0.5 rounded-full">${p.lead_count}</span>
                                     </td>
+                                    <td class="px-4 py-3">
+                                        <span class="bg-blue-900/40 text-blue-300 text-xs px-2 py-0.5 rounded-full">${p.email_count}</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="bg-pink-900/40 text-pink-300 text-xs px-2 py-0.5 rounded-full">${p.ig_count}</span>
+                                    </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button onclick="deleteProject('${p.id}', '${(p.name || '').replace(/'/g, "\\'")}')"
+                                        <button onclick="deleteProject('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
                                             class="text-xs px-3 py-1.5 bg-gray-800 text-red-400 border border-gray-700 rounded hover:bg-red-900/40 hover:text-red-300 hover:border-red-800 transition-colors">
                                             <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i> Delete
                                         </button>
                                     </td>
                                 </tr>
                             `).join('') : `
-                                <tr><td colspan="4" class="text-center text-gray-500 py-8">No projects found</td></tr>
+                                <tr><td colspan="6" class="text-center text-gray-500 py-8">No projects found</td></tr>
                             `}
                         </tbody>
                     </table>
@@ -2064,29 +2073,54 @@
             lucide.createIcons();
         }
 
+        async function renameProject(projectId, currentName) {
+            const newName = prompt('Rename project:', currentName);
+            if (!newName || newName.trim() === currentName) return;
+            try {
+                const res = await fetch(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                // Update inline
+                const el = document.getElementById(`proj-name-${projectId}`);
+                if (el) el.textContent = newName.trim();
+                showToast(`\u2705 Renamed to "${newName.trim()}"`);
+                // Refresh dropdown
+                const projRes = await apiFetch('/api/projects');
+                const projData = await projRes.json();
+                populateProjectDropdown(projData.projects || []);
+            } catch (e) {
+                showToast('\u274c Rename failed: ' + e.message);
+            }
+        }
+
         async function deleteProject(projectId, projectName) {
-            if (!confirm(`⚠️ Delete "${projectName}"?\n\nThis will permanently delete ALL contacts and sequences in this project. This cannot be undone.`)) return;
+            if (!confirm(`\u26a0\ufe0f Delete "${projectName}"?\n\nThis will permanently delete ALL contacts and sequences in this project. This cannot be undone.`)) return;
 
             try {
                 const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                showToast(`🗑️ Project "${projectName}" deleted.`);
-                // Remove row with animation
+                showToast(`\ud83d\uddd1\ufe0f Project "${projectName}" deleted.`);
                 const row = document.getElementById(`proj-row-${projectId}`);
                 if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
 
-                // Refresh project dropdown
                 await loadProjectsTab(document.getElementById('contentArea'));
                 const projRes = await apiFetch('/api/projects');
                 const projData = await projRes.json();
                 populateProjectDropdown(projData.projects || []);
             } catch (e) {
-                showToast('❌ Delete failed: ' + e.message);
+                showToast('\u274c Delete failed: ' + e.message);
             }
         }
 
+        // =========================================================================
+        // SETTINGS
+        // =========================================================================
         function loadSettings(area) {
             area.innerHTML = `
                 <div class="max-w-2xl space-y-4">
