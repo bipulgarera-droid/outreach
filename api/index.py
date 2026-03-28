@@ -868,6 +868,7 @@ def trigger_manual_verification():
         def run_verification_in_background():
             from execution.verify_email import check_email
             from supabase import create_client as _create_client
+            from concurrent.futures import ThreadPoolExecutor, as_completed
             import json as _json
 
             _sb = _create_client(SUPABASE_URL, effective_key)
@@ -878,40 +879,59 @@ def trigger_manual_verification():
                     job['status'] = 'done'
                     return
 
+                # Filter out contacts with no email upfront, or already verified
+                to_verify = []
                 for c in contacts.data:
-                    email = c.get('email')
-                    if not email:
-                        job['done'] += 1
-                        job['skipped'] += 1
-                        continue
-
                     enrichment_data = c.get('enrichment_data') or {}
                     if isinstance(enrichment_data, str):
                         try: enrichment_data = _json.loads(enrichment_data)
                         except: enrichment_data = {}
+                    
+                    c['enrichment_data'] = enrichment_data # Save parsed dict for later
+                    
+                    v_status = enrichment_data.get('verification_status')
+                    
+                    if not c.get('email'):
+                        job['done'] += 1
+                        job['skipped'] += 1
+                    elif v_status in ['valid', 'invalid']:
+                        job['done'] += 1
+                        job['skipped'] += 1
+                    else:
+                        to_verify.append(c)
 
                     logger.info(f"Manual Verification: Checking {email} for contact {c['id']}")
                     v_status, v_reason = check_email(email)
-
                     enrichment_data['verification_status'] = v_status
                     enrichment_data['verification_reason'] = v_reason
+                    return c['id'], email, v_status, enrichment_data
 
-                    if v_status == 'invalid':
-                        logger.warning(f"  ❌ Manual Verification failed for {email}. Clearing email only — sequences kept for WA/IG outreach.")
-                        _sb.table('contacts').update({
-                            'email': None,
-                            'status': 'skipped',
-                            'enrichment_data': enrichment_data
-                        }).eq('id', c['id']).execute()
-                        job['skipped'] += 1
-                    else:
-                        logger.info(f"  ✅ Manual Verification passed ({v_status}) for {email}.")
-                        _sb.table('contacts').update({
-                            'enrichment_data': enrichment_data
-                        }).eq('id', c['id']).execute()
-                        job['valid'] += 1
-
-                    job['done'] += 1
+                # Run up to 20 verifications concurrently (SMTP is I/O-bound, threads help a lot)
+                MAX_WORKERS = 20
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    futures = {executor.submit(verify_one, c): c for c in to_verify}
+                    for future in as_completed(futures):
+                        try:
+                            contact_id, email, v_status, enrichment_data = future.result()
+                            if v_status == 'invalid':
+                                logger.warning(f"  ❌ Verification failed for {email}. Clearing email.")
+                                _sb.table('contacts').update({
+                                    'email': None,
+                                    'status': 'skipped',
+                                    'enrichment_data': enrichment_data
+                                }).eq('id', contact_id).execute()
+                                job['skipped'] += 1
+                            else:
+                                logger.info(f"  ✅ Verification passed ({v_status}) for {email}.")
+                                _sb.table('contacts').update({
+                                    'enrichment_data': enrichment_data
+                                }).eq('id', contact_id).execute()
+                                job['valid'] += 1
+                        except Exception as e:
+                            logger.error(f"Verification worker error: {e}")
+                            job['skipped'] += 1
+                        finally:
+                            job['done'] += 1
 
                 job['status'] = 'done'
 
