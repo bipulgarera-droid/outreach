@@ -2881,72 +2881,123 @@
                     </div>
 
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
-                        <h2 class="text-base font-semibold text-white mb-1">
-                            ${isPeopleMode ? 'Search Google for People' : 'Search Google for Businesses'}
-                        </h2>
-                        <p class="text-xs text-gray-400 mb-5">
-                            ${isPeopleMode
-                                ? 'Find LinkedIn profiles and contacts. Use <code class="bg-gray-800 px-1 rounded">site:linkedin.com</code> for best results.'
-                                : 'Find business websites to enrich with Camoufox — emails &amp; Instagram scraped directly from their site.'}
-                        </p>
-
-                        <!-- Niche and Location -->
-                        <div class="grid grid-cols-2 gap-4 mb-5">
-                            <div>
-                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Niche</label>
-                                <input type="text" id="bulk-search-niche" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. production house">
+                        ${isPeopleMode ? `
+                            <h2 class="text-base font-semibold text-white mb-1">Search B2B Leads (Apify)</h2>
+                            <p class="text-xs text-gray-400 mb-5">Find verified decision makers. Provide job titles and locations to start.</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Contact Job Title(s)</label>
+                                    <input type="text" id="apify-job-titles" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. Founder, CEO (comma sep)">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location (Country/State)</label>
+                                    <input type="text" id="apify-location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. United States, India">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">City (leave Location empty if using)</label>
+                                    <input type="text" id="apify-city" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. Mumbai, New York">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Industry</label>
+                                    <input type="text" id="apify-industry" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. media production (comma sep)">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Keywords</label>
+                                    <input type="text" id="apify-keywords" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. film production (comma sep)">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Size</label>
+                                    <input type="text" id="apify-size" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. 1-10, 11-20 (comma sep)">
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location</label>
-                                <input type="text" id="bulk-search-location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. Mumbai">
+
+                            <div class="flex items-center gap-4 mb-5">
+                                <div>
+                                    <label class="text-xs text-gray-400 whitespace-nowrap block mb-1">Max Leads:</label>
+                                    <select id="apify-fetch-count" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="50">50 leads</option>
+                                        <option value="100" selected>100 leads</option>
+                                        <option value="500">500 leads</option>
+                                        <option value="1000">1,000 leads</option>
+                                        <option value="5000">5,000 leads</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400 whitespace-nowrap block mb-1">Email Status:</label>
+                                    <select id="apify-email-status" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="validated" selected>Validated Only</option>
+                                        <option value="validated,unknown">Validated & Unknown</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Single Query (hidden for Bulk, used for Quick) -->
-                        <div id="queryList" class="space-y-2 mb-4 hidden">
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Queries</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="single-search-query"
-                                    class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:outline-none"
-                                    placeholder="${isPeopleMode ? 'e.g. programmer film festival site:linkedin.com' : 'e.g. SEO agency Chicago'}">
+                            <div class="flex gap-3">
+                                <button onclick="runApifyPeopleSearch()" id="apifySearchBtn"
+                                    class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 transition-all duration-200">
+                                    <i data-lucide="search" class="w-4 h-4"></i> Search Leads
+                                </button>
                             </div>
-                        </div>
+                            <div id="apifySearchStatus" class="mt-4 hidden"></div>
+                            
+                            <p class="text-xs text-gray-500 mt-4 text-center">
+                                Contacts will appear in the <strong class="text-gray-400">Contacts</strong> tab once the search completes in the background.
+                            </p>
+                        ` : `
+                            <h2 class="text-base font-semibold text-white mb-1">Search Google for Businesses</h2>
+                            <p class="text-xs text-gray-400 mb-5">Find business websites to enrich with Camoufox — emails &amp; Instagram scraped directly from their site.</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-5">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Niche</label>
+                                    <input type="text" id="bulk-search-niche" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. production house">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location</label>
+                                    <input type="text" id="bulk-search-location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. Mumbai">
+                                </div>
+                            </div>
 
-                        <!-- Num results -->
-                        <div class="flex items-center gap-4 mb-5">
-                            <label class="text-xs text-gray-400 whitespace-nowrap">Results per query:</label>
-                            <select id="numResults" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                                <option value="10">10 results (Quick)</option>
-                                <option value="50" ${!isPeopleMode ? 'selected' : ''}>50 results</option>
-                                <option value="100" ${isPeopleMode ? 'selected' : ''}>100 results (Standard)</option>
-                                <option value="200">200 results</option>
-                                <option value="500">500 results (Deep)</option>
-                                <option value="1000">1,000 results (Bulk)</option>
-                                <option value="2000">2,000 results (Maximum)</option>
-                                <option value="5000">5,000 results (Maximum)</option>
-                                <option value="10000">10,000 results (Unlimited)</option>
-                            </select>
-                        </div>
+                            <div id="queryList" class="space-y-2 mb-4 hidden">
+                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Queries</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="single-search-query"
+                                        class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none"
+                                        placeholder="e.g. SEO agency Chicago">
+                                </div>
+                            </div>
 
-                        <!-- Actions -->
-                        <div class="flex gap-3">
-                            <button onclick="addQueryRow()" id="addQueryBtn" class="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
-                                <i data-lucide="plus" class="w-4 h-4"></i> Add Query
-                            </button>
-                            <button onclick="runBulkSearch()" id="bulkSearchBtn"
-                                class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 transition-all duration-200 ${isPeopleMode ? 'hidden' : ''}">
-                                <i data-lucide="rocket" class="w-4 h-4"></i>
-                                Bulk Search (20+ Queries)
-                            </button>
-                        </div>
-                        <div id="searchStatus" class="mt-4 hidden"></div>
+                            <div class="flex items-center gap-4 mb-5">
+                                <label class="text-xs text-gray-400 whitespace-nowrap">Results per query:</label>
+                                <select id="numResults" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none">
+                                    <option value="10">10 results (Quick)</option>
+                                    <option value="50" selected>50 results</option>
+                                    <option value="100">100 results (Standard)</option>
+                                    <option value="200">200 results</option>
+                                    <option value="500">500 results (Deep)</option>
+                                    <option value="1000">1,000 results (Bulk)</option>
+                                </select>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button onclick="addQueryRow()" id="addQueryBtn" class="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Add Query
+                                </button>
+                                <button onclick="runBulkSearch()" id="bulkSearchBtn"
+                                    class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 transition-all duration-200">
+                                    <i data-lucide="rocket" class="w-4 h-4"></i> Bulk Search (20+ Queries)
+                                </button>
+                            </div>
+                            <div id="searchStatus" class="mt-4 hidden"></div>
+                            
+                            <p class="text-xs text-gray-500 mt-4 text-center">
+                                Contacts appear in the <strong class="text-gray-400">Contacts</strong> tab once the search completes.
+                                Then run <strong class="text-cyan-400">🕵️ Stealthy Enrich</strong> to scrape their emails.
+                            </p>
+                        `}
                     </div>
-
-                    <!-- History hint -->
-                    <p class="text-xs text-gray-500 mt-4 text-center">
-                        Contacts appear in the <strong class="text-gray-400">Contacts</strong> tab once the search completes.
-                        ${!isPeopleMode ? 'Then run <strong class="text-cyan-400">🕵️ Stealthy Enrich</strong> to scrape their emails.' : ''}
-                    </p>
                 </div>
             `;
             lucide.createIcons();
@@ -3052,21 +3103,53 @@
                 .map(i => i.value.trim()).filter(Boolean);
         }
 
-        async function runPeopleSearch() {
-            const queries = _getSearchQueries();
-            if (!queries.length) { showToast('Add at least one search query'); return; }
-            const num = parseInt(document.getElementById('numResults')?.value || '100');
-            showToast('🔍 Searching for people...');
+        async function runApifyPeopleSearch() {
+            const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
+            const payload = {
+                project_id: currentProjectId,
+                contact_job_title: getVal('apify-job-titles'),
+                contact_location: getVal('apify-location'),
+                contact_city: getVal('apify-city'),
+                company_industry: getVal('apify-industry'),
+                company_keywords: getVal('apify-keywords'),
+                size: getVal('apify-size'),
+                fetch_count: parseInt(getVal('apify-fetch-count') || '100', 10),
+                email_status: getVal('apify-email-status') || 'validated'
+            };
+
+            if (!payload.contact_job_title) {
+                return alert('Please enter at least one job title to search.');
+            }
+            if (!payload.contact_location && !payload.contact_city) {
+                return alert('Please enter either a Location or a City.');
+            }
+
+            const btn = document.getElementById('apifySearchBtn');
+            const status = document.getElementById('apifySearchStatus');
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Starting Apify Leads-Finder background task... Check contacts tab in a few minutes.
+            </div>`;
+            lucide.createIcons();
+
             try {
-                const res = await apiFetch('/api/contacts/search', {
+                const res = await apiFetch('/api/contacts/apify-people-search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ queries, num_results: num, project_id: currentProjectId })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                if (data.error) { showToast('❌ ' + data.error); return; }
-                showToast(`✅ Found ${data.inserted} new people (${data.skipped} dupes skipped)`);
-            } catch (e) { showToast('❌ ' + e.message); }
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    ✅ Success! ${data.message}
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+                btn.disabled = false;
+            }
         }
 
         async function runBusinessSearch() {

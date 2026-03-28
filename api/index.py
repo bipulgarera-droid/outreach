@@ -172,6 +172,8 @@ def delete_project(project_id):
         supabase.table('email_sequences').delete().eq('project_id', project_id).execute()
         # Delete email templates
         supabase.table('email_templates').delete().eq('project_id', project_id).execute()
+        # Delete search runs
+        supabase.table('search_runs').delete().eq('project_id', project_id).execute()
         # Delete contacts
         supabase.table('contacts').delete().eq('project_id', project_id).execute()
         # Delete the project itself
@@ -592,9 +594,38 @@ def run_bulk_search_api():
         return jsonify({'message': f'Bulk search started for {niche} in {location}. Results will appear in Contacts soon.'})
     except Exception as e:
         logger.error(f"Bulk search error: {e}")
+@app.route('/api/contacts/apify-people-search', methods=['POST'])
+@cross_origin()
+def run_apify_people_search():
+    try:
+        data = request.json or {}
+        project_id = data.get('project_id')
+        
+        # Remove project_id from data so it doesn't get passed to the apify params parser
+        params = {k: v for k, v in data.items() if k != 'project_id'}
+
+        if not params.get('contact_job_title'):
+            return jsonify({'error': 'No job titles provided'}), 400
+
+        def _run():
+            try:
+                from execution.apify_leads_finder import run_apify_leads_search
+                total_stats = run_apify_leads_search(params, project_id=project_id)
+                logger.info(f"[ApifyPeopleSearch] Done — {total_stats}")
+            except Exception as e:
+                logger.error(f"Async apify people search error: {e}")
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        
+        return jsonify({'success': True, 'message': 'Apify Leads search started in the background.'})
+
+    except Exception as e:
+        logger.error(f"Search API error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/contacts/search', methods=['POST'])
+
+@app.route('/api/contacts/business-search', methods=['POST'])
 @cross_origin()
 def run_biz_search():
     try:
