@@ -489,7 +489,10 @@ def bulk_delete_contacts():
         if not contact_ids:
             return jsonify({'error': 'No contact IDs provided'}), 400
             
-        supabase.table('contacts').delete().in_('id', contact_ids).execute()
+        for i in range(0, len(contact_ids), 100):
+            chunk = contact_ids[i:i+100]
+            supabase.table('contacts').delete().in_('id', chunk).execute()
+            
         return jsonify({'success': True, 'deleted': len(contact_ids)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -874,8 +877,15 @@ def trigger_manual_verification():
             _sb = _create_client(SUPABASE_URL, effective_key)
             job = _verify_jobs[job_id]
             try:
-                contacts = _sb.table('contacts').select('id, email, enrichment_data').in_('id', contact_ids).execute()
-                if not contacts.data:
+                all_contacts_data = []
+                chunk_size = 100
+                for i in range(0, len(contact_ids), chunk_size):
+                    chunk = contact_ids[i:i + chunk_size]
+                    chunk_res = _sb.table('contacts').select('id, email, enrichment_data').in_('id', chunk).execute()
+                    if chunk_res.data:
+                        all_contacts_data.extend(chunk_res.data)
+
+                if not all_contacts_data:
                     job['status'] = 'done'
                     return
 
@@ -1421,8 +1431,14 @@ def create_sequences():
             return jsonify({'error': 'No email templates found. Seed them first.'}), 400
         
         # Get contacts synchronously to get the count
-        contacts = supabase.table('contacts').select('*').in_('id', contact_ids).execute()
-        if not contacts.data:
+        all_contacts_data = []
+        for i in range(0, len(contact_ids), 100):
+            chunk = contact_ids[i:i+100]
+            chunk_res = supabase.table('contacts').select('*').in_('id', chunk).execute()
+            if chunk_res.data:
+                all_contacts_data.extend(chunk_res.data)
+                
+        if not all_contacts_data:
             return jsonify({'error': 'No valid contacts found.'}), 400
             
         import threading
@@ -1687,11 +1703,11 @@ def create_sequences():
 
 
         # Launch background thread (daemon=False so it outlives the request)
-        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data), daemon=False)
+        thread = threading.Thread(target=run_in_background, args=(project_id, all_contacts_data, templates.data), daemon=False)
         thread.start()
 
         return jsonify({
-            'message': f'Started generating sequences for {len(contacts.data)} contacts in the background.',
+            'message': f'Started generating sequences for {len(all_contacts_data)} contacts in the background.',
             'status': 'processing'
         }), 202
     except Exception as e:
