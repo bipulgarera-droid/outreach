@@ -37,9 +37,11 @@ def is_bounce(from_addr: str, subject: str) -> bool:
     if any(x in s for x in ['undeliverable', 'delivery status notification', 'failure', 'returned mail']): return True
     return False
 
-def check_all_replies():
+def check_all_replies(days=7, logger_callback=None):
     """Main synchronizer using Service Role Key to bypass RLS."""
-    print("--- Starting Hardened Reply Detection (Zero-Miss) ---")
+    msg = f"--- Starting Hardened Reply Detection (Zero-Miss) for last {days} days ---"
+    print(msg)
+    if logger_callback: logger_callback(msg)
     
     # Environment Setup
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -116,8 +118,8 @@ def check_all_replies():
             if folder_status != 'OK':
                 mail.select('INBOX')
 
-            # Scan last 10 days
-            since_date = (datetime.now() - timedelta(days=10)).strftime("%d-%b-%Y")
+            # Scan last X days
+            since_date = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
             status, message_ids = mail.search(None, f'(SINCE {since_date})')
             
             if status != "OK" or not message_ids[0]:
