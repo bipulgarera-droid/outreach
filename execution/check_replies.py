@@ -178,6 +178,12 @@ def check_all_replies(days=7, logger_callback=None):
                     
                     if not sender or sender == acct_email.lower(): continue
 
+                    # --- GLOBAL DIAGNOSTIC DUMP ---
+                    msg = f"    [DUMP] From: {sender} | Subj: {subject_hdr[:60]}"
+                    print(msg)
+                    if logger_callback: logger_callback(msg)
+                    # ------------------------------
+
                     # 1. Check if Human Sender matches a contact (Highest Priority)
                     if sender in prospect_emails:
                         contact_id, project_id = prospect_emails[sender]
