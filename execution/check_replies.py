@@ -7,6 +7,7 @@ import ssl
 from datetime import datetime, timedelta
 import logging
 from email.header import decode_header
+from dotenv import load_dotenv
 
 # Constants
 IMAP_HOST = "imap.gmail.com"
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 def _load_accounts_from_env() -> list[dict]:
     """Load Gmail accounts from .env using GMAIL_N_EMAIL format."""
     accounts = []
-    for i in range(1, 25): # Increased range
+    for i in range(1, 25):
         acct_email = os.getenv(f"GMAIL_{i}_EMAIL")
         acct_password = os.getenv(f"GMAIL_{i}_PASSWORD")
         if not acct_email or not acct_password:
@@ -46,12 +47,9 @@ def _decode_header_value(raw):
 def _extract_sender_email(from_header: str) -> str:
     """Extract just the email address from a From: header, handling encoded strings."""
     decoded_from = _decode_header_value(from_header)
-    
-    # Use regex for better precision if possible
     emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', decoded_from)
     if emails:
         return emails[0].strip().lower()
-        
     if "<" in decoded_from and ">" in decoded_from:
         return decoded_from.split("<")[1].split(">")[0].strip().lower()
     return decoded_from.strip().lower()
@@ -60,8 +58,6 @@ def _get_imap_connection(acct_email: str, acct_password: str) -> imaplib.IMAP4_S
     """Helper to establish a fresh IMAP connection with timeout."""
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=30)
     mail.login(acct_email, acct_password)
-    
-    # Try [Gmail]/All Mail if available, it's more robust
     try:
         mail.select('"[Gmail]/All Mail"')
     except:
@@ -90,34 +86,26 @@ def _extract_body(msg) -> str:
     return body.strip()
 
 def is_bounce(from_addr: str, subject: str) -> bool:
-    """Determine if a message is a NDR (Non-Delivery Receipt)."""
-    from_addr = (from_addr or "").lower()
-    subject = (subject or "").lower()
-    
-    bounce_senders = ['mailer-daemon', 'postmaster', 'no-reply@accounts.google.com']
-    if any(s in from_addr for s in bounce_senders):
+    """Determine if a message is a NDR."""
+    f = (from_addr or "").lower()
+    s = (subject or "").lower()
+    if any(x in f for x in ['mailer-daemon', 'postmaster', 'no-reply@accounts.google.com']):
         return True
-        
-    bounce_subjects = ['undeliverable', 'delivery status notification', 'failure', 'returned mail']
-    if any(s in subject for s in bounce_subjects):
+    if any(x in s for x in ['undeliverable', 'delivery status notification', 'failure', 'returned mail']):
         return True
-        
     return False
 
 def analyze_sentiment(text: str):
-    """Simple sentiment analysis (Placeholder for more robust LLM check)."""
-    text = text.lower()
-    positive_keywords = ['interested', 'let\'s talk', 'call', 'meeting', 'demo', 'tell me more', 'sounds good']
-    negative_keywords = ['not interested', 'remove', 'unsubscribe', 'stop', 'wrong person', 'fuck off']
-    
-    if any(k in text for k in negative_keywords):
+    """Simple keyword-based sentiment."""
+    t = text.lower()
+    if any(k in t for k in ['not interested', 'remove', 'unsubscribe', 'stop', 'wrong person']):
         return 'Negative', 0.1
-    if any(k in text for k in positive_keywords):
+    if any(k in t for k in ['interested', 'let\'s talk', 'call', 'meeting', 'sounds good']):
         return 'Positive', 0.9
     return 'Neutral', 0.5
 
-def check_replies_for_account(acct_email: str, acct_password: str, prospect_emails: set, days: int = 7, logger_callback=None) -> tuple[list[dict], list[str]]:
-    """Connect and scan for replies/bounces with full-spectrum matching."""
+def check_replies_for_account(acct_email, acct_password, prospect_emails, domain_map, days=10, logger_callback=None):
+    """Connect and scan for replies/bounces with Absolute Robustness."""
     replied = []
     bounced = []
     mail = None
@@ -143,7 +131,6 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
 
         for msg_id in ids:
             try:
-                # Fetch full message for robust body scanning
                 status, msg_data = mail.fetch(msg_id, "(RFC822 X-GM-THRID X-GM-MSGID)")
                 if status != "OK" or not msg_data: continue
 
@@ -166,23 +153,30 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 is_b = is_bounce(from_hdr, subject_hdr)
                 found_prospect = None
                 
-                # --- MATCHING LOGIC ---
-                # 1. Direct Sender Match
+                # --- ABSOLUTE MATCHING ---
+                # 1. Direct Email Match
                 if sender in prospect_emails:
                     found_prospect = sender
-                    _log(f"  {'❌ Bounce' if is_b else '✅ Reply'} Match (Sender): {sender}")
                 
-                # 2. Redundant Body Match (The Marcelo Protection)
+                # 2. Domain/Body Match (Marcelo Protection)
                 if not found_prospect:
+                    # Check body for ALL prospect emails
                     for p_email in prospect_emails:
-                        if p_email in body_lower:
+                        if p_email in body_lower or p_email in from_hdr.lower():
                             found_prospect = p_email
-                            _log(f"  {'❌ Bounce' if is_b else '✅ Reply'} Match (Body): {found_prospect}")
                             break
-                
+                    
+                    # Check domain map
+                    if not found_prospect and domain_map:
+                        for domain, p_email in domain_map.items():
+                            if domain in body_lower or domain in from_hdr.lower():
+                                found_prospect = p_email
+                                break
+
                 if found_prospect:
                     if is_b:
                         bounced.append(found_prospect)
+                        _log(f"  ❌ Bounce: {found_prospect}")
                     else:
                         sentiment, score = analyze_sentiment(body_text)
                         replied.append({
@@ -195,6 +189,7 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                             'message_id': message_id_gmail,
                             'recipient_email': acct_email
                         })
+                        _log(f"  ✅ Reply: {found_prospect}")
             except Exception as e:
                 logger.error(f"Error processing message {msg_id}: {e}")
 
@@ -208,11 +203,8 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
     return replied, bounced
 
 def check_replies():
-    """Main entry point for reply and bounce synchronization."""
-    from dotenv import load_dotenv
+    """Main synchronizer using Service Role Key to bypass RLS."""
     load_dotenv()
-    
-    # Use Service Role Key to bypass RLS for automated jobs
     url = os.getenv('SUPABASE_URL')
     key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_KEY')
     
@@ -222,57 +214,61 @@ def check_replies():
     from supabase import create_client
     supabase = create_client(url, key)
     
-    # Get all contacts to monitor (status-agnostic for safety)
-    res = supabase.table('contacts').select('id, email').not_.is_('email', 'null').execute()
+    # Monitor ALL contacts
+    res = supabase.table('contacts').select('id, email, website').not_.is_('email', 'null').execute()
     contact_map = {r['email'].strip().lower(): r['id'] for r in res.data}
     prospect_emails = set(contact_map.keys())
+    
+    # Build Domain Map for colleague/alternate-email detection
+    domain_map = {}
+    for r in res.data:
+        p_email = r['email'].strip().lower()
+        # From Email Domain
+        ed = p_email.split('@')[-1]
+        if len(ed) > 4 and ed not in ['gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com']:
+            domain_map[ed] = p_email
+        # From Website
+        if r['website']:
+            wd = r['website'].replace('https://','').replace('http://','').replace('www.','').split('/')[0].lower()
+            if len(wd) > 3:
+                domain_map[wd] = p_email
     
     accounts = _load_accounts_from_env()
     all_replies = []
     all_bounces = set()
     
     for acct in accounts:
-        replies, bounces = check_replies_for_account(acct['email'], acct['app_password'], prospect_emails)
-        all_replies.extend(replies)
-        all_bounces.update(bounces)
+        r, b = check_replies_for_account(acct['email'], acct['app_password'], prospect_emails, domain_map)
+        all_replies.extend(r)
+        all_bounces.update(b)
     
-    # Process Bounces
-    for bounce_email in all_bounces:
-        cid = contact_map.get(bounce_email.lower())
+    # Save Bounces
+    for b_email in all_bounces:
+        cid = contact_map.get(b_email.lower())
         if cid:
             supabase.table('contacts').update({'status': 'bounced'}).eq('id', cid).execute()
-            logger.info(f"Updated status to BOUNCED for {bounce_email}")
 
-    # Process Replies
-    for reply in all_replies:
-        cid = contact_map.get(reply['email'].lower())
+    # Save Replies
+    for r in all_replies:
+        cid = contact_map.get(r['email'].lower())
         if cid:
-            # 1. Update contact status
             supabase.table('contacts').update({'status': 'replied'}).eq('id', cid).execute()
-            
-            # 2. Record reply (deduplicated by message_id)
-            if reply['message_id']:
-                existing = supabase.table('replies').select('id').eq('message_id', reply['message_id']).execute()
-                if existing.data: continue
-                
+            if r['message_id']:
+                exists = supabase.table('replies').select('id').eq('message_id', r['message_id']).execute()
+                if exists.data: continue
             supabase.table('replies').insert({
                 'contact_id': cid,
-                'sender_email': reply['email'],
-                'recipient_email': reply['recipient_email'],
-                'subject': reply['subject'],
-                'body': reply['body'],
-                'sentiment': reply['sentiment'],
-                'sentiment_score': reply['sentiment_score'],
-                'message_id': reply['message_id'],
-                'thread_id': reply['thread_id']
+                'sender_email': r['email'],
+                'recipient_email': r['recipient_email'],
+                'subject': r['subject'],
+                'body': r['body'][:5000], # Trucate extreme bodies
+                'sentiment': r['sentiment'],
+                'sentiment_score': r['sentiment_score'],
+                'message_id': r['message_id'],
+                'thread_id': r['thread_id']
             }).execute()
-            logger.info(f"Recorded REPLY from {reply['email']}")
 
-    return {
-        "status": "completed",
-        "replies_found": len(all_replies),
-        "bounces_found": len(all_bounces)
-    }
+    return {"status": "completed", "replies": len(all_replies), "bounces": len(all_bounces)}
 
 if __name__ == "__main__":
     check_replies()
