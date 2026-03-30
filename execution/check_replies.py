@@ -219,11 +219,9 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 message_id_gmail = re.search(r"X-GM-MSGID (\d+)", metadata_raw)
                 message_id_gmail = message_id_gmail.group(1) if message_id_gmail else None
 
-                # ALWAYS log every sender at INFO level for now so we can see what's happening
-                # Except if it's from current account (likely a sent message in All Mail)
-                if sender != acct_email.lower():
-                    _log(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
-
+                # Log every sender to console/debug only to prevent dashboard bloating
+                logger.debug(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
+                
                 # A. Direct Reply
                 if sender in prospect_emails:
                     _log(f"  ✅ Reply Match: {sender}")
