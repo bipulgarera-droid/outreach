@@ -36,8 +36,13 @@ DELAY_MIN = int(os.getenv('DELAY_MIN_SECONDS', 45))
 DELAY_MAX = int(os.getenv('DELAY_MAX_SECONDS', 90))
 
 
-def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str = None, contact_ids: list[str] = None, skip_reply_check: bool = False) -> dict:
+def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str = None, contact_ids: list[str] = None, skip_reply_check: bool = False, logger_callback=None) -> dict:
     """Send all pending emails where scheduled_at <= now(). Filters by project_id and/or contact_ids if provided."""
+
+    def _log(msg, level='info'):
+        logger.info(msg)
+        if logger_callback:
+            logger_callback(msg)
     
     # Init Supabase
     from supabase import create_client
@@ -55,12 +60,12 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
     if not skip_reply_check:
         try:
             from execution.check_replies import check_all_replies
-            logger.info("Checking for replies and bounces before sending...")
-            check_all_replies(days=7)
+            _log("Checking for replies and bounces before sending...")
+            check_all_replies(days=7, logger_callback=logger_callback)
         except Exception as e:
             logger.warning(f"Pre-send reply check failed (skipping): {e}")
     else:
-        logger.info("Skipping redundant reply check (already performed by daily_run).")
+        _log("Skipping redundant reply check (already performed by daily_run).")
     # ────────────────────────────────────────────────────────────────
 
     # Init SMTP Pool
@@ -86,7 +91,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
     result = query.limit(limit).order('scheduled_at').execute()
     
     sequences = result.data or []
-    logger.info(f"Found {len(sequences)} emails ready to send")
+    _log(f"Found {len(sequences)} emails ready to send")
     
     # Fetch sender_groups for all involved projects
     project_ids = list(set([s.get('project_id') for s in sequences if s.get('project_id')]))
@@ -104,7 +109,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             to_email = (contact.get('email') or '').strip().rstrip('.,;:)!% ]').strip()
             
             if not to_email:
-                logger.warning(f"No email for contact, skipping sequence {seq['id']}")
+                _log(f"No email for contact, skipping sequence {seq['id']}", level='warning')
                 stats['skipped'] += 1
                 continue
             
@@ -116,13 +121,13 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             
             v_status = ed.get('verification_status')
             if v_status == 'invalid':
-                logger.warning(f"BOUNCE PROTECTION: Skipping {to_email} (Status: INVALID, Reason: {ed.get('verification_reason', '?')}). Marking as skipped.")
+                _log(f"BOUNCE PROTECTION: Skipping {to_email} (Status: INVALID, Reason: {ed.get('verification_reason', '?')}). marking as skipped.", level='warning')
                 if not dry_run:
                     supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                 stats['skipped'] += 1
                 continue
             elif v_status == 'risky':
-                logger.warning(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY, Reason: {ed.get('verification_reason', '?')}). Marking as skipped_risky.")
+                _log(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY, Reason: {ed.get('verification_reason', '?')}). marking as skipped_risky.", level='warning')
                 if not dry_run:
                     supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                 stats['skipped'] += 1
@@ -131,7 +136,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             # REPLY GUARD: Check if contact has replied — if so, cancel all their pending emails
             contact_status = supabase.table('contacts').select('status').eq('id', seq['contact_id']).execute()
             if contact_status.data and contact_status.data[0].get('status') == 'replied':
-                logger.info(f"Contact {to_email} has replied. Cancelling sequence {seq['id']} and all remaining steps.")
+                _log(f"Contact {to_email} has replied. Cancelling sequence {seq['id']} and all remaining steps.")
                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', seq['contact_id']).eq('status', 'pending').execute()
                 stats['skipped'] += 1
                 continue
@@ -147,7 +152,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                 
             usage = pool.get_total_usage(sender_group)
             limit_total = pool.get_total_limit(sender_group)
-            logger.info(f"{'[DRY RUN] ' if dry_run else ''}[{usage}/{limit_total}] Sending step {seq['step_number']} to {to_email} from {account.email}")
+            _log(f"{'[DRY RUN] ' if dry_run else ''}[{usage}/{limit_total}] Sending step {seq['step_number']} to {to_email} from {account.email}")
             
             # --- Dynamic Sender Identity ---
             # Templates usually hardcode "Bipul" at the end. We dynamically swap it if Pranav is sending.

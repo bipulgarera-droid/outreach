@@ -19,6 +19,8 @@ from google import genai
 # Setup
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
+from execution.log_manager import JobLogger
+from execution.smtp_pool import SMTPPool
 
 # Load environment
 env_path = BASE_DIR / '.env'
@@ -887,8 +889,10 @@ def trigger_manual_verification():
             import json as _json
 
             _sb = _create_client(SUPABASE_URL, effective_key)
-            job = _verify_jobs[job_id]
+            job_in_mem = _verify_jobs[job_id]
+            job = JobLogger("Verify Emails")
             try:
+                job.info(f"Starting verification task for {len(contact_ids)} contacts...")
                 all_contacts_data = []
                 chunk_size = 100
                 for i in range(0, len(contact_ids), chunk_size):
@@ -949,11 +953,8 @@ def trigger_manual_verification():
                                 }).eq('id', contact_id).execute()
                                 job['skipped'] += 1
                             else:
-                                logger.info(f"  ✅ Verification passed ({v_status}) for {email}.")
-                                _sb.table('contacts').update({
-                                    'enrichment_data': enrichment_data
-                                }).eq('id', contact_id).execute()
                                 job['valid'] += 1
+                                job.info(f"Verified {email}: VALID")
                         except Exception as e:
                             logger.error(f"Verification worker error: {e}")
                             job['skipped'] += 1
@@ -961,11 +962,15 @@ def trigger_manual_verification():
                             job['done'] += 1
 
                 job['status'] = 'done'
+                job.success(f"Verification complete. Valid: {job['valid']}, Skipped: {job['skipped']}")
+                job.complete('completed')
 
             except Exception as e:
                 logger.error(f"Background verification failed: {e}")
                 job['status'] = 'error'
                 job['error'] = str(e)
+                job.error(f"Verification failed: {e}")
+                job.complete('failed')
 
         thread = threading.Thread(target=run_verification_in_background)
         thread.start()
@@ -1797,6 +1802,87 @@ def send_test_sequence():
         logger.error(f"Test sequence error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/projects/<project_id>/knowledge', methods=['GET'])
+def get_project_knowledge(project_id):
+    try:
+        res = supabase.table('project_knowledge_base').select('*').eq('project_id', project_id).order('created_at', desc=True).execute()
+        return jsonify(res.data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/projects/<project_id>/knowledge', methods=['POST'])
+def add_project_knowledge(project_id):
+    try:
+        data = request.json
+        res = supabase.table('project_knowledge_base').insert({
+            'project_id': project_id,
+            'title': data.get('title'),
+            'content': data.get('content'),
+            'category': data.get('category', 'faq')
+        }).execute()
+        if not res.data:
+            return jsonify({'error': 'Failed to insert knowledge item'}), 500
+        return jsonify(res.data[0])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/knowledge/<knowledge_id>', methods=['DELETE'])
+def delete_project_knowledge(knowledge_id):
+    try:
+        supabase.table('project_knowledge_base').delete().eq('id', knowledge_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/replies/<id>/approve', methods=['POST'])
+def approve_reply(id):
+    """Approves a draft reply and sends it."""
+    try:
+        data = request.json or {}
+        content = data.get('content')
+        if not content:
+            return jsonify({'error': 'Content is required'}), 400
+            
+        # 1. Fetch reply details
+        res = supabase.table('replies').select('*').eq('id', id).single().execute()
+        reply = res.data
+        if not reply:
+            return jsonify({'error': 'Reply not found'}), 404
+            
+        # 2. Get sender account from pool
+        try:
+            pool = SMTPPool()
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 500
+            
+        account = pool.get_account_by_email(reply['sender_email'])
+        if not account:
+            return jsonify({'error': f"Sender account {reply['sender_email']} not found in pool"}), 404
+            
+        # 3. Send email via Gmail API
+        # recipient_email is the prospect's email
+        send_res = pool.send_email(
+            account=account,
+            to_addr=reply['recipient_email'],
+            subject=f"Re: {reply.get('subject', 'Outreach')}",
+            body_html=content,
+            thread_id=reply.get('thread_id')
+        )
+        
+        if not send_res['success']:
+            return jsonify({'error': send_res['error']}), 500
+            
+        # 4. Update reply status to 'sent'
+        supabase.table('replies').update({
+            'status': 'sent',
+            'draft_reply': content,
+            'updated_at': datetime.utcnow().isoformat()
+        }).eq('id', id).execute()
+        
+        return jsonify({'success': True, 'message': 'Reply sent successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/sequences/send', methods=['POST'])
 def trigger_send():
@@ -1809,11 +1895,18 @@ def trigger_send():
         contact_ids = data.get('contact_ids') # For "Send Selected"
         
         def run_send():
+            job = JobLogger(f"Email Dispatch{(' (Project: ' + str(project_id) + ')') if project_id else ' (All Active)'}")
             try:
                 from execution.send_emails import send_pending_emails
-                send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id, contact_ids=contact_ids)
+                job.info("Triggering background email dispatch...")
+                # We will update send_pending_emails to take a logger_callback
+                results = send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id, contact_ids=contact_ids, logger_callback=job.info)
+                job.success(f"Dispatch finished. Results: {results}")
+                job.complete('completed')
             except Exception as e:
                 logger.error(f"Background send error: {e}")
+                job.error(f"Dispatch failed: {e}")
+                job.complete('failed')
 
         thread = threading.Thread(target=run_send)
         thread.daemon = True
@@ -1923,21 +2016,25 @@ def trigger_daily_run():
         project_id = data.get('project_id')
 
         def run_daily():
+            job = JobLogger("Daily Sync & Send")
             try:
                 # Step 1: Check replies
                 from execution.check_replies import check_all_replies
-                logger.info("Starting daily run: Checking replies...")
-                reply_stats = check_all_replies(days=7)
-                logger.info(f"Reply check complete: {reply_stats}")
+                job.info("Step 1: Synchronizing replies from tracking accounts...")
+                reply_stats = check_all_replies(days=7, logger_callback=job.info)
+                job.info(f"Reply check complete: {reply_stats}")
 
                 # Step 2: Send pending emails
-                logger.info("Starting daily run: Sending pending emails...")
+                job.info("Step 2: Dispatching scheduled emails...")
                 from execution.send_emails import send_pending_emails
-                send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id)
-                logger.info("Daily run: Sending pending emails complete.")
+                results = send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id, logger_callback=job.info)
+                job.success(f"Daily run finished. Results: {results}")
+                job.complete('completed')
 
             except Exception as e:
                 logger.error(f"Background daily run error: {e}")
+                job.error(f"Daily run failed: {e}")
+                job.complete('failed')
 
         thread = threading.Thread(target=run_daily)
         thread.daemon = True
@@ -2296,6 +2393,27 @@ def seed_templates():
         return jsonify({'message': f'Generated {len(templates_to_insert)} email templates', 'count': len(templates_to_insert)})
     except Exception as e:
         logger.error(f"Seed error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Job Logs
+# =============================================================================
+
+@app.route('/api/job-logs', methods=['GET'])
+def list_job_logs():
+    try:
+        limit = int(request.args.get('limit', 20))
+        res = supabase.table('job_logs').select('*').order('started_at', desc=True).limit(limit).execute()
+        return jsonify(res.data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/job-logs/<job_id>/events', methods=['GET'])
+def list_job_events(job_id):
+    try:
+        res = supabase.table('job_events').select('*').eq('job_log_id', job_id).order('created_at', desc=False).execute()
+        return jsonify(res.data)
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================

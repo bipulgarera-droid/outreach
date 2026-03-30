@@ -477,6 +477,7 @@
             { id: 'search', label: 'Search', icon: 'search' },
             { id: 'templates', label: 'Templates', icon: 'file-text' },
             { id: 'projects', label: 'Projects', icon: 'folder' },
+            { id: 'logs', label: 'Live Logs', icon: 'terminal' },
             { id: 'settings', label: 'Settings', icon: 'settings' }
         ];
 
@@ -526,6 +527,10 @@
             'settings': [
                 { id: 'api-keys', label: 'API Keys' },
                 { id: 'gmail', label: 'Gmail OAuth' }
+            ],
+            'logs': [
+                { id: 'active-jobs', label: 'Active Jobs' },
+                { id: 'job-history', label: 'History' }
             ]
         };
 
@@ -761,6 +766,7 @@
                 else if (currentTopTab === 'search') await loadSearch(area, actions);
                 else if (currentTopTab === 'templates') await loadTemplates(area);
                 else if (currentTopTab === 'projects') await loadProjectsTab(area);
+                else if (currentTopTab === 'logs') await loadLiveLogs(area, actions);
                 else if (currentTopTab === 'settings') loadSettings(area);
             } catch (e) {
                 area.innerHTML = `<div class="text-red-400 p-4">Error: ${e.message}</div>`;
@@ -972,8 +978,8 @@
                                 <tr class="bg-gray-900/80 border-b border-gray-800 text-gray-500 text-[10px] uppercase tracking-widest">
                                     <th class="text-left px-5 py-3 font-semibold">Prospect</th>
                                     <th class="text-left px-5 py-3 font-semibold">Sentiment</th>
-                                    <th class="text-left px-5 py-3 font-semibold">Message Preview</th>
-                                    <th class="text-left px-5 py-3 font-semibold">Received</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Message & Draft</th>
+                                    <th class="text-left px-5 py-3 font-semibold w-32">Received</th>
                                     <th class="text-right px-5 py-3 font-semibold">Action</th>
                                 </tr>
                             </thead>
@@ -981,18 +987,28 @@
                                 ${filtered.map(r => `
                                     <tr class="hover:bg-gray-800/40 transition-all duration-200 group">
                                         <td class="px-5 py-4">
-                                            <div class="font-semibold text-white group-hover:text-violet-400 transition-colors">${r.contacts?.name || 'Unknown'}</div>
-                                            <div class="text-[11px] text-gray-500 font-mono">${r.sender_email}</div>
+                                            <div class="font-semibold text-white group-hover:text-violet-400 transition-colors flex items-center gap-2">
+                                                ${r.contacts?.name || 'Unknown'}
+                                                ${r.status === 'needs_review' ? '<span class="text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/30 px-1.5 py-0.5 rounded-full uppercase font-bold tracking-tighter">Needs Review</span>' : ''}
+                                            </div>
+                                            <div class="text-[11px] text-gray-500 font-mono flex items-center gap-2 mt-1">
+                                                <i data-lucide="mail" class="w-2.5 h-2.5 text-gray-600"></i> ${r.sender_email}
+                                            </div>
                                         </td>
                                         <td class="px-5 py-4">
                                             ${sentimentBadge(r.sentiment)}
                                         </td>
-                                        <td class="px-5 py-4 max-w-md">
-                                            <div class="text-gray-300 line-clamp-1 italic text-xs leading-relaxed">${r.body || '(No body)'}</div>
+                                        <td class="px-5 py-4 max-w-lg">
+                                            <div class="text-gray-400 line-clamp-1 text-[11px] italic mb-1">"${r.body || '(No body)'}"</div>
+                                            ${r.draft_reply ? `
+                                                <div class="text-[10px] text-violet-400 bg-violet-600/10 border border-violet-500/20 px-2 py-1 rounded mt-1 line-clamp-1">
+                                                    <span class="font-bold uppercase tracking-tight mr-1">AI Draft:</span> ${r.draft_reply}
+                                                </div>
+                                            ` : ''}
                                         </td>
                                         <td class="px-5 py-4 text-gray-500 text-[11px]">
                                             ${new Date(r.received_at).toLocaleDateString()}
-                                            <div class="text-[10px] opacity-60">${new Date(r.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                            <div class="text-[10px] opacity-40 mt-0.5">${new Date(r.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                         </td>
                                         <td class="px-5 py-4 text-right">
                                             <button onclick="showReplyModal('${r.id}')" class="text-[11px] font-bold bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white px-3.5 py-1.5 rounded-lg border border-violet-600/30 transition-all duration-200">
@@ -1074,7 +1090,7 @@
                                     <label class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Draft Reply</label>
                                     <span class="text-[9px] text-violet-400/50">SENDING FROM: ${r.recipient_email}</span>
                                 </div>
-                                <textarea id="replyResponseText" rows="6" class="w-full bg-gray-950 border-2 border-gray-800 rounded-2xl px-5 py-4 text-sm text-white outline-none focus:border-violet-600 focus:bg-gray-900 transition-all resize-none shadow-2xl" placeholder="Compose your personal reply..."></textarea>
+                                <textarea id="replyResponseText" rows="6" class="w-full bg-gray-950 border-2 border-gray-800 rounded-2xl px-5 py-4 text-sm text-white outline-none focus:border-violet-600 focus:bg-gray-900 transition-all resize-none shadow-2xl" placeholder="Compose your personal reply...">${r.draft_reply || ''}</textarea>
                                 
                                 <div class="flex gap-4 pt-2">
                                     <button onclick="closeModal()" class="px-6 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
@@ -1988,13 +2004,7 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                const found = data.replies_found || 0;
-                if (found > 0) {
-                    showToast(`📬 Found ${found} reply(ies)! Sequences auto-stopped for those contacts.`);
-                    loadContent(); // refresh the view
-                } else {
-                    showToast('📭 No new replies detected from active prospects.');
-                }
+                showToast(`🚀 Reply check started! <button onclick="switchTopTab('logs')" class="ml-2 text-violet-400 hover:text-violet-300 font-bold underline">View Live Logs</button>`, true);
             } catch (e) {
                 showToast('❌ Reply check error: ' + e.message);
             } finally {
@@ -2112,7 +2122,7 @@
             btn.disabled = true;
             if (window.lucide) window.lucide.createIcons();
 
-            showToast('🚀 Daily run started — checking replies + sending pending emails...');
+            showToast(`🚀 Daily run started — checking replies + sending pending emails... <button onclick="switchTopTab('logs')" class="ml-2 text-violet-400 hover:text-violet-300 font-bold underline">View Live Logs</button>`, true);
 
             try {
                 const res = await fetch('/api/daily-run', {
@@ -2277,6 +2287,10 @@
                                         <span class="bg-pink-900/40 text-pink-300 text-xs px-2 py-0.5 rounded-full">${p.ig_count}</span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
+                                        <button onclick="openKnowledgeBase('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
+                                            class="text-xs px-3 py-1.5 bg-gray-800 text-violet-400 border border-gray-700 rounded hover:bg-violet-900/40 hover:text-violet-300 hover:border-violet-800 transition-colors mr-2">
+                                            <i data-lucide="book-open" class="w-3 h-3 inline mr-1"></i> Context
+                                        </button>
                                         <button onclick="deleteProject('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
                                             class="text-xs px-3 py-1.5 bg-gray-800 text-red-400 border border-gray-700 rounded hover:bg-red-900/40 hover:text-red-300 hover:border-red-800 transition-colors">
                                             <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i> Delete
@@ -2332,7 +2346,7 @@
             const newName = prompt('Rename project:', currentName);
             if (!newName || newName.trim() === currentName) return;
             try {
-                const res = await fetch(`/api/projects/${projectId}`, {
+                const res = await apiFetch(`/api/projects/${projectId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: newName.trim() })
@@ -2349,6 +2363,93 @@
                 populateProjectDropdown(projData.projects || []);
             } catch (e) {
                 showToast('\u274c Rename failed: ' + e.message);
+            }
+        }
+
+        async function openKnowledgeBase(projectId, projectName) {
+            const modal = document.getElementById('knowledgeBaseModal');
+            const titleElem = document.getElementById('kbModalTitle');
+            const listElem = document.getElementById('kbItemsList');
+            const projectIdInput = document.getElementById('kbProjectId');
+            
+            titleElem.textContent = `Knowledge Base: ${projectName}`;
+            projectIdInput.value = projectId;
+            listElem.innerHTML = '<div class="text-center py-8 text-gray-500">Loading context...</div>';
+            modal.classList.remove('hidden');
+            
+            await refreshKnowledgeBaseList(projectId);
+        }
+
+        async function refreshKnowledgeBaseList(projectId) {
+            const listElem = document.getElementById('kbItemsList');
+            try {
+                const res = await apiFetch(`/api/projects/${projectId}/knowledge`);
+                const items = await res.json();
+                
+                if (items.length === 0) {
+                    listElem.innerHTML = '<div class="text-center py-8 text-gray-500">No context items found for this project. Add some below!</div>';
+                } else {
+                    listElem.innerHTML = items.map(item => `
+                        <div class="p-4 bg-gray-800/50 border border-gray-700 rounded-lg mb-3">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-medium text-white">${item.title}</h4>
+                                <button onclick="deleteKnowledgeItem('${item.id}', '${projectId}')" class="text-gray-500 hover:text-red-400 transition-colors">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <p class="text-sm text-gray-400 whitespace-pre-wrap">${item.content}</p>
+                            <div class="mt-2 text-xs text-gray-500">
+                                <span class="bg-gray-700 px-2 py-0.5 rounded">${item.category}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                listElem.innerHTML = `<div class="text-center py-8 text-red-400">Error loading context: ${e.message}</div>`;
+            }
+        }
+
+        async function addKnowledgeItem() {
+            const projectId = document.getElementById('kbProjectId').value;
+            const title = document.getElementById('kbTitleInput').value.trim();
+            const content = document.getElementById('kbContentInput').value.trim();
+            const category = document.getElementById('kbCategoryInput').value;
+            
+            if (!title || !content) {
+                showToast('\u26a0\ufe0f Title and content are required');
+                return;
+            }
+            
+            try {
+                const res = await apiFetch(`/api/projects/${projectId}/knowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content, category })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                
+                showToast('\u2705 Added knowledge item');
+                document.getElementById('kbTitleInput').value = '';
+                document.getElementById('kbContentInput').value = '';
+                await refreshKnowledgeBaseList(projectId);
+            } catch (e) {
+                showToast('\u274c Failed to add item: ' + e.message);
+            }
+        }
+
+        async function deleteKnowledgeItem(itemId, projectId) {
+            if (!confirm('Are you sure you want to delete this context item?')) return;
+            try {
+                const res = await apiFetch(`/api/knowledge/${itemId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                
+                showToast('\u2705 Context item deleted');
+                await refreshKnowledgeBaseList(projectId);
+            } catch (e) {
+                showToast('\u274c Failed to delete item: ' + e.message);
             }
         }
 
@@ -2407,6 +2508,192 @@
                     </div>
                 </div>
             `;
+        }
+
+        async function loadLiveLogs(area, actions) {
+            window.currentJobId = null;
+            if (window.logPollInterval) clearInterval(window.logPollInterval);
+            
+            area.innerHTML = `
+                <div class="flex h-[calc(100vh-200px)] min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <!-- Job List -->
+                    <div class="w-72 border-r border-gray-800 flex flex-col">
+                        <div class="p-4 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between">
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-gray-400">Execution History</h3>
+                            <button onclick="loadLiveLogs(document.getElementById('contentArea'))" class="text-gray-500 hover:text-white transition-colors">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <div id="jobList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                            <div class="p-8 text-center text-gray-600 italic text-xs">Loading execution history...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Log Content -->
+                    <div class="flex-1 flex flex-col bg-black/20">
+                        <div id="logHeader" class="p-4 border-b border-gray-800 bg-gray-900/30 flex items-center justify-between">
+                            <div>
+                                <h3 id="currentJobName" class="text-sm font-semibold text-white">Select a job to view logs</h3>
+                                <div class="flex items-center gap-3 mt-1">
+                                    <span id="currentJobStatus" class="text-[10px] text-gray-400 uppercase tracking-wider">Ready</span>
+                                    <span id="currentJobTime" class="text-[10px] text-gray-600"></span>
+                                </div>
+                            </div>
+                            <div id="jobLiveIndicator" class="hidden flex items-center gap-2 px-2 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Live</span>
+                            </div>
+                        </div>
+                        
+                        <div id="logConsole" class="flex-1 p-5 font-mono text-[12px] overflow-y-auto bg-slate-950/90 text-emerald-400/90 leading-relaxed space-y-0.5 selection:bg-emerald-500/30">
+                            <div class="text-gray-700 select-none opacity-50">
+                                <p>> System ready.</p>
+                                <p>> Awaiting selection...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/job-logs');
+                const data = await res.json();
+                const jobs = data.jobs || [];
+                const list = document.getElementById('jobList');
+                
+                if (jobs.length === 0) {
+                    list.innerHTML = '<div class="p-8 text-center text-gray-600 text-xs text-balance">No background tasks recorded yet. Try running an email verification or send cycle.</div>';
+                    return;
+                }
+
+                list.innerHTML = jobs.map(j => {
+                    const date = new Date(j.started_at);
+                    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    
+                    let statusColor = 'bg-gray-500/20 text-gray-400';
+                    if (j.status === 'running') statusColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                    else if (j.status === 'completed') statusColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                    else if (j.status === 'failed') statusColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+
+                    return `
+                        <div onclick="selectJob('${j.id}', '${j.job_name}')" id="job-item-${j.id}" 
+                            class="job-item p-3 rounded-lg border border-transparent hover:border-gray-800 hover:bg-gray-800/40 cursor-pointer transition-all group relative">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="text-[11px] font-bold text-gray-300 group-hover:text-white truncate mb-0.5">${j.job_name}</div>
+                                    <div class="text-[10px] text-gray-500 flex items-center gap-1.5 line-clamp-1">
+                                        <span>${dateStr}</span>
+                                        <span class="opacity-30">•</span>
+                                        <span>${timeStr}</span>
+                                    </div>
+                                </div>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 \${statusColor}">\${j.status}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Auto-select first running job if exists
+                const running = jobs.find(j => j.status === 'running');
+                if (running) selectJob(running.id, running.job_name);
+                else if (jobs.length > 0) selectJob(jobs[0].id, jobs[0].job_name);
+
+            } catch (e) {
+                console.error("Failed to load jobs", e);
+                document.getElementById('jobList').innerHTML = `<div class="p-4 text-red-400 text-xs">Error loading history.</div>`;
+            }
+        }
+
+        window.currentJobId = null;
+        window.logPollInterval = null;
+
+        async function selectJob(id, name) {
+            window.currentJobId = id;
+            
+            // UI Updates
+            document.querySelectorAll('.job-item').forEach(el => el.classList.remove('bg-gray-800/60', 'border-gray-700', 'ring-1', 'ring-violet-500/50'));
+            const activeEl = document.getElementById(`job-item-${id}`);
+            if (activeEl) activeEl.classList.add('bg-gray-800/60', 'border-gray-700', 'ring-1', 'ring-violet-500/50');
+            
+            document.getElementById('currentJobName').textContent = name;
+            const consoleEl = document.getElementById('logConsole');
+            consoleEl.innerHTML = '<div class="text-gray-700 animate-pulse">> Connecting to event stream...</div>';
+            
+            if (window.logPollInterval) clearInterval(window.logPollInterval);
+            
+            await fetchJobEvents(id, true);
+            window.logPollInterval = setInterval(() => fetchJobEvents(id), 3000);
+        }
+
+        async function fetchJobEvents(id, isInitial = false) {
+            if (window.currentJobId !== id) return;
+            
+            try {
+                const res = await apiFetch(`/api/job-logs/${id}/events`);
+                const data = await res.json();
+                const events = data.events || [];
+                const consoleEl = document.getElementById('logConsole');
+                const statusEl = document.getElementById('currentJobStatus');
+                const timeEl = document.getElementById('currentJobTime');
+                const liveIndicator = document.getElementById('jobLiveIndicator');
+
+                if (data.job) {
+                    statusEl.textContent = `Status: ${data.job.status}`;
+                    if (data.job.status === 'completed' && data.job.completed_at) {
+                        const duration = (new Date(data.job.completed_at) - new Date(data.job.started_at)) / 1000;
+                        timeEl.textContent = `Executed in ${duration.toFixed(1)}s`;
+                    } else {
+                        timeEl.textContent = `Started at ${new Date(data.job.started_at).toLocaleTimeString()}`;
+                    }
+                    
+                    if (data.job.status === 'running') liveIndicator.classList.remove('hidden');
+                    else liveIndicator.classList.add('hidden');
+                }
+
+                if (events.length === 0) {
+                    if (isInitial) consoleEl.innerHTML = '<div class="text-gray-700 italic">> No logs recorded for this task.</div>';
+                } else {
+                    const html = events.map(e => {
+                        const time = new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                        let color = 'text-gray-400';
+                        let prefix = '';
+                        
+                        if (e.level === 'warning') { color = 'text-amber-400/90'; prefix = '[WARN] '; }
+                        else if (e.level === 'error') { color = 'text-red-400'; prefix = '[ERR] '; }
+                        else if (e.level === 'success') { color = 'text-emerald-400 font-bold'; prefix = '[OK] '; }
+                        else if (e.level === 'job_start') { color = 'text-blue-400 border-l-2 border-blue-500 pl-2 my-2'; prefix = '>>> '; }
+                        else if (e.level === 'job_end') { color = 'text-emerald-400 border-l-2 border-emerald-500 pl-2 my-2'; prefix = '<<< '; }
+                        
+                        return `<div class="flex gap-4 hover:bg-white/5 transition-colors group">
+                            <span class="text-gray-600/50 flex-shrink-0 tabular-nums w-16 select-none">${time}</span>
+                            <span class="${color}">${prefix}${e.message}</span>
+                        </div>`;
+                    }).join('');
+                    
+                    const isAtBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 100;
+                    consoleEl.innerHTML = html;
+                    if (isAtBottom || isInitial) {
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+                    }
+                }
+
+                if (data.job && data.job.status !== 'running') {
+                    if (window.logPollInterval) {
+                        clearInterval(window.logPollInterval);
+                        window.logPollInterval = null;
+                        // Final status badge update in list if needed
+                        const badge = document.querySelector(`#job-item-${id} span.bg-blue-500\\\\/20`);
+                        if (badge) {
+                            badge.className = 'text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                            badge.textContent = 'completed';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error", e);
+            }
         }
 
         // =========================================================================
@@ -2623,7 +2910,12 @@
                             <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
                                 <div class="bg-blue-500 h-full transition-all duration-500" style="width: ${percent || 0}%"></div>
                             </div>
-                            <p class="text-[10px] text-gray-500 italic">Running in background. Refresh for latest list.</p>
+                            <div class="flex items-center justify-between">
+                                <p class="text-[10px] text-gray-500 italic">Running in background. Refresh for latest list.</p>
+                                <button onclick="switchTopTab('logs')" class="text-[10px] text-violet-400 hover:text-violet-300 font-bold underline flex items-center gap-1">
+                                    <i data-lucide="terminal" class="w-3 h-3"></i> View Live Logs
+                                </button>
+                            </div>
                         </div>
                     `;
                     if (window.lucide) lucide.createIcons();
@@ -3547,17 +3839,27 @@
         // =========================================================================
         // TOAST
         // =========================================================================
-        function showToast(msg) {
+        function showToast(msg, isHtml = false) {
             const existing = document.getElementById('toast');
             if (existing) existing.remove();
 
             const toast = document.createElement('div');
             toast.id = 'toast';
-            toast.className = 'fixed bottom-6 right-6 bg-gray-800 border border-gray-700 text-white px-5 py-3 rounded-xl shadow-xl text-sm z-50 animate-fade-in';
-            toast.textContent = msg;
+            toast.className = 'fixed bottom-6 right-6 bg-gray-800 border border-gray-700 text-white px-5 py-3 rounded-xl shadow-xl text-sm z-50 animate-fade-in flex items-center gap-3';
+            if (isHtml) {
+                toast.innerHTML = msg;
+            } else {
+                toast.textContent = msg;
+            }
             document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 5000);
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => toast.remove(), 500);
+            }, 7000);
         }
+    
         
         // =========================================================================
         // INLINE EDITING
@@ -3624,6 +3926,59 @@
     
         resumeSeqProgressIfActive();
         </script>
+    <!-- Knowledge Base Modal -->
+    <div id="knowledgeBaseModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center">
+                <h3 id="kbModalTitle" class="text-xl font-semibold text-white flex items-center">
+                    <i data-lucide="book-open" class="w-5 h-5 mr-2 text-violet-400"></i>
+                    Knowledge Base
+                </h3>
+                <button onclick="document.getElementById('knowledgeBaseModal').classList.add('hidden')" class="text-gray-500 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6">
+                <!-- List of existing items -->
+                <div id="kbItemsList" class="mb-8">
+                    <!-- Items will be loaded here -->
+                </div>
+                
+                <!-- Add new item form -->
+                <div class="border-t border-gray-800 pt-6">
+                    <h4 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Add New Context</h4>
+                    <input type="hidden" id="kbProjectId">
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Title (e.g. "Pricing", "About SEO Agency OS")</label>
+                            <input type="text" id="kbTitleInput" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-violet-500 transition-colors" placeholder="Context Title">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Content (The details AI should use for drafting)</label>
+                            <textarea id="kbContentInput" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-violet-500 transition-colors" placeholder="Provide details, FAQs, or instructions..."></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                            <select id="kbCategoryInput" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-violet-500 transition-colors">
+                                <option value="faq">FAQ</option>
+                                <option value="company_details">Company Details</option>
+                                <option value="offer">Offer Details</option>
+                                <option value="tone">Tone/Style Instructions</option>
+                            </select>
+                        </div>
+                        
+                        <button onclick="addKnowledgeItem()" class="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg shadow-lg shadow-violet-900/20 transition-all">
+                            Add Context Item
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

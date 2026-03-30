@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
+from execution.generate_reply import generate_draft_reply
 load_dotenv(env_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -151,18 +152,26 @@ def _extract_body(msg) -> str:
     return body.strip()
 
 
-def check_replies_for_account(acct_email: str, acct_password: str, prospect_emails: set, days: int = 7) -> tuple[list[str], list[str]]:
+def check_replies_for_account(acct_email: str, acct_password: str, prospect_emails: set, days: int = 7, logger_callback=None) -> tuple[list[dict], list[str]]:
     """
     Connect via IMAP to a single Gmail account and look for:
     1. Direct replies from known prospect emails.
     2. Bounce notifications (mailer-daemon) referring to these prospects.
 
-    Returns (replied_emails, bounced_emails).
+    Returns (replied_emails_dicts, bounced_emails).
     """
     replied = []
     bounced = []
     mail = None
+
+    def _log(msg, level='info'):
+        if level == 'warning': logger.warning(msg)
+        else: logger.info(msg)
+        if logger_callback:
+            logger_callback(msg)
+
     try:
+        _log(f"Checking {acct_email}...")
         mail = _get_imap_connection(acct_email, acct_password)
 
         # Search for recent emails
@@ -170,12 +179,12 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
         status, message_ids = mail.search(None, f'(SINCE {since_date})')
 
         if status != "OK" or not message_ids[0]:
-            logger.info(f"[{acct_email}] No recent emails found.")
+            _log(f"[{acct_email}] No recent emails found.")
             mail.logout()
             return [], []
 
         ids = message_ids[0].split()
-        logger.info(f"[{acct_email}] Scanning {len(ids)} emails from last {days} days...")
+        _log(f"[{acct_email}] Scanning {len(ids)} emails from last {days} days...")
 
         for msg_id in ids:
             try:
@@ -215,7 +224,7 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
 
                 # A. Direct Reply
                 if sender in prospect_emails:
-                    logger.info(f"  ✅ Reply: {sender}")
+                    _log(f"  ✅ Reply: {sender}")
                     
                     # Extract body for storage
                     email_body = _extract_body(msg)
@@ -284,8 +293,14 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
     return replied, list(set(bounced))
 
 
-def check_all_replies(days: int = 7) -> dict:
+def check_all_replies(days: int = 7, logger_callback=None) -> dict:
     """Checks all accounts and updates Supabase for replies/bounces."""
+    
+    def _log(msg, level='info'):
+        if level == 'warning': logger.warning(msg)
+        else: logger.info(msg)
+        if logger_callback:
+            logger_callback(msg)
     from supabase import create_client
     supabase_url = os.getenv('SUPABASE_URL')
     supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_KEY')
@@ -300,18 +315,18 @@ def check_all_replies(days: int = 7) -> dict:
     res = supabase.table('contacts').select('id, email').eq('status', 'in_sequence').execute()
     contacts = res.data or []
     if not contacts:
-        logger.info("No active prospects.")
+        _log("No active prospects.")
         return {'checked': 0, 'replies_found': 0, 'bounces_found': 0}
 
     email_to_id = {c['email'].strip().lower(): c['id'] for c in contacts if c.get('email')}
     prospect_emails = set(email_to_id.keys())
     
     accounts = _load_accounts_from_env()
-    all_replied = set()
+    all_replied = []
     all_bounced = set()
 
     for acct in accounts:
-        replied, bounced = check_replies_for_account(acct['email'], acct['app_password'], prospect_emails, days)
+        replied, bounced = check_replies_for_account(acct['email'], acct['app_password'], prospect_emails, days, logger_callback=logger_callback)
         # replied is now a list of dicts
         for r in replied:
             # Simple deduplication in-memory for this run
@@ -331,6 +346,18 @@ def check_all_replies(days: int = 7) -> dict:
                 # 2. Check if reply already exists in DB to prevent duplicates across runs
                 existing = supabase.table('replies').select('id').eq('message_id', reply_data['message_id']).execute()
                 if not existing.data:
+                    # 2.5 Generate draft if positive/question
+                    draft = None
+                    if reply_data['sentiment'] in ['positive', 'question'] and pid:
+                        _log(f"Generating AI draft for {email}...")
+                        try:
+                            # Get contact name
+                            c_res = supabase.table('contacts').select('name').eq('id', cid).single().execute()
+                            cname = c_res.data.get('name', 'there') if c_res.data else 'there'
+                            draft = generate_draft_reply(pid, reply_data['body'], cname)
+                        except Exception as de:
+                            _log(f"Drafting failed: {de}", level='warning')
+
                     # 3. Insert into replies table
                     supabase.table('replies').insert({
                         'contact_id': cid,
@@ -343,14 +370,16 @@ def check_all_replies(days: int = 7) -> dict:
                         'sentiment_score': reply_data['sentiment_score'],
                         'thread_id': reply_data['thread_id'],
                         'message_id': reply_data['message_id'],
-                        'received_at': datetime.utcnow().isoformat()
+                        'received_at': datetime.utcnow().isoformat(),
+                        'draft_reply': draft,
+                        'status': 'needs_review' if draft else 'received'
                     }).execute()
-                    logger.info(f"Stored reply from {email} (Sentiment: {reply_data['sentiment']})")
+                    _log(f"Stored reply from {email} (Sentiment: {reply_data['sentiment']})")
 
                 # 4. Update contact status
                 supabase.table('contacts').update({'status': 'replied', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
-                logger.info(f"Marked {email} as REPLIED")
+                _log(f"Marked {email} as REPLIED")
             except Exception as e:
                 logger.warning(f"Failed to process reply for {email}: {e}")
 
@@ -379,7 +408,7 @@ def check_all_replies(days: int = 7) -> dict:
 
                 # 3. Cancel all remaining pending sequences for this contact
                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
-                logger.info(f"Marked {email} as BOUNCED and cancelled pending steps")
+                _log(f"Marked {email} as BOUNCED and cancelled pending steps")
             except Exception as e:
                 logger.warning(f"Failed to update status for bounced email {email}: {e}")
 
