@@ -143,9 +143,6 @@ def _extract_body(msg) -> str:
             if payload:
                 body = payload.decode('utf-8', errors='ignore')
         except: pass
-    
-    # Simple cleanup: remove large chunks of quoted text if possible
-    # (Optional: can be refined later)
     return body.strip()
 
 
@@ -210,9 +207,8 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 from_header = _decode_header_value(msg.get("From", ""))
                 subject_header = _decode_header_value(msg.get("Subject", ""))
                 sender = _extract_sender_email(from_header)
-                
+
                 # Extract Gmail metadata from the fetch response
-                # Format is usually [b'ID (X-GM-THRID 123 X-GM-MSGID 456 RFC822 {size})', b'...raw email...']
                 metadata_raw = msg_data[0][0].decode()
                 thread_id = re.search(r"X-GM-THRID (\d+)", metadata_raw)
                 thread_id = thread_id.group(1) if thread_id else None
@@ -221,15 +217,12 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
 
                 # Log every sender to console/debug only to prevent dashboard bloating
                 logger.debug(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
-                
-                # A. Direct Reply
+
+                # A. Direct Reply Match
                 if sender in prospect_emails:
                     _log(f"  ✅ Reply Match: {sender}")
-                    
-                    # Extract body for storage
                     email_body = _extract_body(msg)
                     sentiment, score = analyze_sentiment(email_body)
-                    
                     replied.append({
                         'email': sender,
                         'subject': subject_header,
@@ -250,35 +243,24 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                     is_bounce = True
 
                 if is_bounce:
-                    # Get body as string
-                    body = ""
-                    if msg.is_multipart():
-                        for part in msg.walk():
-                            if part.get_content_type() == "text/plain":
-                                try:
-                                    body += str(part.get_payload(decode=True).decode('utf-8', errors='ignore'))
-                                except: pass
-                    else:
-                        try:
-                            body = str(msg.get_payload(decode=True).decode('utf-8', errors='ignore'))
-                        except: pass
+                    # Get body as string - include ALL parts for bounces
+                    body_parts = []
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        if ctype in ["text/plain", "text/rfc822-headers", "message/delivery-status"]:
+                            try:
+                                payload = part.get_payload(decode=True)
+                                if payload: body_parts.append(payload.decode('utf-8', errors='ignore'))
+                            except: pass
                     
-                    # Regex for Final-Recipient or any known prospect email in the body
-                    # 1. Look for structured Final-Recipient field
-                    fr_match = re.search(r"Final-Recipient:.*?;\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", body, re.IGNORECASE)
-                    if fr_match:
-                        email_found = fr_match.group(1).lower()
-                        if email_found in prospect_emails:
-                            logger.info(f"  ❌ Bounce (Direct): {email_found}")
-                            bounced.append(email_found)
-                    else:
-                        # 2. Heuristic: scan whole body for any monitored email
-                        # This works for "User not found: <email>" type plain text bounces
-                        for monitoring in prospect_emails:
-                            if monitoring in body.lower():
-                                logger.info(f"  ❌ Bounce (Heuristic): {monitoring}")
-                                bounced.append(monitoring)
-                                break
+                    full_bounce_body = "\n".join(body_parts).lower()
+                    
+                    # Search for any known prospect email in the bounce body
+                    for p_email in prospect_emails:
+                        if p_email in full_bounce_body:
+                            _log(f"  ❌ Bounce Detected: {p_email}")
+                            bounced.append(p_email)
+                            break
             except Exception as e:
                 logger.warning(f"  Error on msg {msg_id}: {e}")
                 continue
@@ -301,6 +283,7 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
         else: logger.info(msg)
         if logger_callback:
             logger_callback(msg)
+
     from supabase import create_client
     supabase_url = os.getenv('SUPABASE_URL')
     supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_KEY')
@@ -311,18 +294,23 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
 
     supabase = create_client(supabase_url, supabase_key)
 
-    # Fetch prospects in active sequence or previously replied
+    # Fetch ALL prospects that have an email address (very important for catch-all)
+    # We include all statuses except maybe 'skipped' or 'new' if they never got mail,
+    # but to be safe, let's include EVERYTHING that has been enriched/icebreakers/etc.
     res = supabase.table('contacts') \
         .select('id, email') \
-        .in_('status', ['in_sequence', 'replied', 'completed']) \
+        .not_.is_('email', 'null') \
         .execute()
+    
     contacts = res.data or []
     if not contacts:
-        _log("No active prospects.")
+        _log("No prospects found in database.")
         return {'checked': 0, 'replies_found': 0, 'bounces_found': 0}
 
     email_to_id = {c['email'].strip().lower(): c['id'] for c in contacts if c.get('email')}
     prospect_emails = set(email_to_id.keys())
+    
+    _log(f"Monitoring {len(prospect_emails)} prospect emails across all projects...")
     
     accounts = _load_accounts_from_env()
     all_replied = []
@@ -330,9 +318,7 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
 
     for acct in accounts:
         replied, bounced = check_replies_for_account(acct['email'], acct['app_password'], prospect_emails, days, logger_callback=logger_callback)
-        # replied is now a list of dicts
         for r in replied:
-            # Simple deduplication in-memory for this run
             if not any(ar['message_id'] == r['message_id'] for ar in all_replied):
                 all_replied.append(r)
         all_bounced.update(bounced)
@@ -354,14 +340,13 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
                     if reply_data['sentiment'] in ['positive', 'question'] and pid:
                         _log(f"Generating AI draft for {email}...")
                         try:
-                            # Get contact name
                             c_res = supabase.table('contacts').select('name').eq('id', cid).single().execute()
                             cname = c_res.data.get('name', 'there') if c_res.data else 'there'
                             draft = generate_draft_reply(pid, reply_data['body'], cname)
                         except Exception as de:
                             _log(f"Drafting failed: {de}", level='warning')
 
-                    # 3. Insert into replies table
+                    # 3. Store in replies table
                     supabase.table('replies').insert({
                         'contact_id': cid,
                         'project_id': pid,
@@ -390,10 +375,7 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
         cid = email_to_id.get(email)
         if cid:
             try:
-                # 1. Mark contact as bounced
                 supabase.table('contacts').update({'status': 'bounced', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
-                
-                # 2. Mark the MOST RECENT SENT step as 'bounced' (for dashboard stats)
                 recent_sent = supabase.table('email_sequences') \
                     .select('id') \
                     .eq('contact_id', cid) \
@@ -404,12 +386,8 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
                 
                 if recent_sent.data:
                     seq_id = recent_sent.data[0]['id']
-                    supabase.table('email_sequences') \
-                        .update({'status': 'bounced'}) \
-                        .eq('id', seq_id) \
-                        .execute()
+                    supabase.table('email_sequences').update({'status': 'bounced'}).eq('id', seq_id).execute()
 
-                # 3. Cancel all remaining pending sequences for this contact
                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
                 _log(f"Marked {email} as BOUNCED and cancelled pending steps")
             except Exception as e:
