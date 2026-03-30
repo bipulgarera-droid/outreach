@@ -220,7 +220,9 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 message_id_gmail = message_id_gmail.group(1) if message_id_gmail else None
 
                 # ALWAYS log every sender at INFO level for now so we can see what's happening
-                _log(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
+                # Except if it's from current account (likely a sent message in All Mail)
+                if sender != acct_email.lower():
+                    _log(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
 
                 # A. Direct Reply
                 if sender in prospect_emails:
@@ -311,8 +313,11 @@ def check_all_replies(days: int = 7, logger_callback=None) -> dict:
 
     supabase = create_client(supabase_url, supabase_key)
 
-    # Fetch prospects in active sequence
-    res = supabase.table('contacts').select('id, email').eq('status', 'in_sequence').execute()
+    # Fetch prospects in active sequence or previously replied
+    res = supabase.table('contacts') \
+        .select('id, email') \
+        .in_('status', ['in_sequence', 'replied', 'completed']) \
+        .execute()
     contacts = res.data or []
     if not contacts:
         _log("No active prospects.")
