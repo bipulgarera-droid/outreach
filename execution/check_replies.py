@@ -69,10 +69,9 @@ def check_all_replies(days=7, logger_callback=None):
     if logger_callback: logger_callback(msg)
     
     res = supabase.table('contacts').select('id, email, company, enrichment_data, project_id').execute()
-    contacts = res.data or []
-    prospect_emails = set()
-    domain_map = {} # domain -> (contact_id, project_id)
-    contact_project_map = {} # contact_id -> project_id
+    contacts = [c for c in res.data if c is not None] if res.data else []
+    prospect_emails = {} # email -> (id, pid)
+    domain_map = {} # domain -> (id, pid)
     
     # Blacklisted domains that should never be mapped to a contact via domain-matching
     BLACKLIST_DOMAINS = {
@@ -84,11 +83,10 @@ def check_all_replies(days=7, logger_callback=None):
     for c in contacts:
         cid = c['id']
         pid = c['project_id']
-        contact_project_map[cid] = pid
         
         email_val = (c.get('email') or '').lower().strip()
         if email_val:
-            prospect_emails.add(email_val)
+            prospect_emails[email_val] = (cid, pid)
             e_domain = email_val.split('@')[-1]
             if e_domain not in BLACKLIST_DOMAINS:
                 domain_map[e_domain] = (cid, pid)
@@ -127,6 +125,8 @@ def check_all_replies(days=7, logger_callback=None):
         print("No Gmail accounts found in environment")
         return
 
+    from email.utils import parseaddr
+
     # 3. Scan Accounts
     for acct_email, acct_password in accounts:
         msg = f"\nScanning: {acct_email}..."
@@ -164,7 +164,10 @@ def check_all_replies(days=7, logger_callback=None):
                     msg_obj = email.message_from_bytes(raw_header)
                     from_hdr = _decode_header_value(msg_obj.get("From", ""))
                     subject_hdr = _decode_header_value(msg_obj.get("Subject", ""))
-                    sender = _extract_sender_email(from_hdr)
+                    
+                    # Exact extraction
+                    _, sender_email = parseaddr(from_hdr.lower())
+                    sender = sender_email.strip()
                     
                     if not sender or sender == acct_email.lower(): continue
 
@@ -179,40 +182,34 @@ def check_all_replies(days=7, logger_callback=None):
                     
                     if is_b:
                         # Deep bounce detection
-                        res_status, full_data = mail.fetch(msg_id, "(RFC822)")
-                        if res_status == 'OK' and full_data and isinstance(full_data[0], tuple):
-                            raw_full = full_data[0][1]
+                        res_status, fd = mail.fetch(msg_id, "(RFC822)")
+                        if res_status == 'OK' and fd and isinstance(fd[0], tuple):
+                            raw_full = fd[0][1]
                             if raw_full:
                                 full_msg = email.message_from_bytes(raw_full)
                                 if full_msg.is_multipart():
                                     for part in full_msg.walk():
                                         if part.get_content_type() == "text/plain":
-                                            payload = part.get_payload(decode=True)
-                                            if payload: body += payload.decode(errors='replace')
+                                            p = part.get_payload(decode=True)
+                                            if p: body += p.decode(errors='replace')
                                 else:
-                                    payload = full_msg.get_payload(decode=True)
-                                    if payload: body = payload.decode(errors='replace')
+                                    p = full_msg.get_payload(decode=True)
+                                    if p: body = p.decode(errors='replace')
                                 
-                                for p_email in prospect_emails:
+                                for p_email, match_data in prospect_emails.items():
                                     if p_email in body.lower():
-                                        matches = [c for c in contacts if (c.get('email') or '').lower() == p_email]
-                                        if matches:
-                                            contact_id = matches[0]['id']
-                                            project_id = matches[0]['project_id']
-                                            msg = f"  [BOUNCE] Found recipient: {p_email}"
-                                            print(msg)
-                                            if logger_callback: logger_callback(msg)
-                                            break
+                                        contact_id, project_id = match_data
+                                        msg = f"  [BOUNCE] Found recipient: {p_email}"
+                                        print(msg)
+                                        if logger_callback: logger_callback(msg)
+                                        break
                     else:
                         # Normal Reply detection
                         if sender in prospect_emails:
-                            matches = [c for c in contacts if (c.get('email') or '').lower() == sender]
-                            if matches:
-                                contact_id = matches[0]['id']
-                                project_id = matches[0]['project_id']
+                            contact_id, project_id = prospect_emails[sender]
                         else:
                             domain = sender.split('@')[-1]
-                            if domain not in BLACKLIST_DOMAINS:
+                            if domain and domain not in BLACKLIST_DOMAINS:
                                 match = domain_map.get(domain)
                                 if match:
                                     contact_id, project_id = match
@@ -238,7 +235,6 @@ def check_all_replies(days=7, logger_callback=None):
 
                         if is_b:
                             supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
-                            # Optional: Update email_sequences too
                         else:
                             msg = f"  [REPLY] {sender}"
                             print(msg)
@@ -265,15 +261,17 @@ def check_all_replies(days=7, logger_callback=None):
                                 }).execute()
                             except Exception as e:
                                 if 'duplicate key' in str(e).lower():
-                                    pass # Already logged, no need to error
+                                    pass # Expected conflict, skip
                                 else:
                                     print(f"  Error inserting reply: {e}")
                             
-                            # Update contact status (ALWAYS do this if a reply is found)
+                            # Final Status Update
                             supabase.table('contacts').update({'status': 'replied'}).eq('id', contact_id).execute()
                             
                 except Exception as e:
-                    msg = f"  Error on msg {msg_id}: {e}"
+                    import traceback
+                    tb = traceback.format_exc()
+                    msg = f"  Error on msg {msg_id}: {e}\n{tb}"
                     print(msg)
                     if logger_callback: logger_callback(msg)
             mail.logout()
