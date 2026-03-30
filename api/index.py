@@ -430,7 +430,11 @@ def list_contacts():
         limit = int(request.args.get('limit', 50))
         offset = int(request.args.get('offset', 0))
         
-        query = supabase.table('contacts').select('*', count='exact').eq('project_id', project_id)
+        if status == 'REPLIED':
+            query = supabase.table('contacts').select('*, replies(sender_email, body, sentiment, received_at)', count='exact').eq('project_id', project_id)
+        else:
+            query = supabase.table('contacts').select('*', count='exact').eq('project_id', project_id)
+
         
         if status:
             query = query.eq('status', status)
@@ -912,7 +916,7 @@ def trigger_manual_verification():
                     if not c.get('email'):
                         job['done'] += 1
                         job['skipped'] += 1
-                    elif False: # v_status and not force: (DISABLED FOR NOW AS REQUESTED)
+                    elif v_status and not force:
                         # Skip if it already has ANY verification status (valid, invalid, risky, etc.)
                         job['done'] += 1
                         job['skipped'] += 1
