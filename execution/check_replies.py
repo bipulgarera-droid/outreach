@@ -113,10 +113,14 @@ def _extract_sender_email(from_header: str) -> str:
 
 def _get_imap_connection(acct_email: str, acct_password: str) -> imaplib.IMAP4_SSL:
     """Helper to establish a fresh IMAP connection with timeout."""
-    # Timeout=30 is key for avoiding long hangs
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=30)
     mail.login(acct_email, acct_password)
-    mail.select("INBOX")
+    
+    # Try [Gmail]/All Mail if available, it's more robust
+    try:
+        mail.select('"[Gmail]/All Mail"')
+    except:
+        mail.select("INBOX")
     return mail
 
 
