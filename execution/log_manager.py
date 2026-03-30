@@ -9,7 +9,7 @@ load_dotenv()
 class JobLogger:
     def __init__(self, job_name):
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
         self.supabase = create_client(url, key)
         self.job_name = job_name
         self.job_id = None

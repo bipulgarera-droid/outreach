@@ -1992,17 +1992,31 @@ def send_manual_reply(reply_id):
 
 @app.route('/api/sequences/check-replies', methods=['POST'])
 def check_replies():
-    """Check Gmail inboxes for prospect replies and auto-stop their sequences."""
+    """Check Gmail inboxes for prospect replies and auto-stop their sequences (Background)."""
     try:
         data = request.json or {}
         days = data.get('days', 7)
 
-        from execution.check_replies import check_all_replies
-        stats = check_all_replies(days=days)
+        def run_check():
+            job = JobLogger("Reply Check")
+            try:
+                from execution.check_replies import check_all_replies
+                job.info(f"Starting reply check (scanning last {days} days)...")
+                stats = check_all_replies(days=days, logger_callback=job.info)
+                job.success(f"Reply check complete. Found {stats.get('replies', 0)} replies and {stats.get('bounces', 0)} bounces.")
+                job.complete('completed')
+            except Exception as e:
+                logger.error(f"Background reply check error: {e}")
+                job.error(f"Reply check failed: {e}")
+                job.complete('failed')
 
-        return jsonify(stats)
+        thread = threading.Thread(target=run_check)
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'status': 'started', 'message': 'Reply check started in background.'})
     except Exception as e:
-        logger.error(f"Reply check error: {e}")
+        logger.error(f"Reply check trigger error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2404,15 +2418,20 @@ def list_job_logs():
     try:
         limit = int(request.args.get('limit', 20))
         res = supabase.table('job_logs').select('*').order('started_at', desc=True).limit(limit).execute()
-        return jsonify(res.data)
+        return jsonify({'jobs': res.data or []})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/job-logs/<job_id>/events', methods=['GET'])
 def list_job_events(job_id):
     try:
+        # Also fetch the job details
+        job_res = supabase.table('job_logs').select('*').eq('id', job_id).single().execute()
         res = supabase.table('job_events').select('*').eq('job_log_id', job_id).order('created_at', desc=False).execute()
-        return jsonify(res.data)
+        return jsonify({
+            'job': job_res.data,
+            'events': res.data or []
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
