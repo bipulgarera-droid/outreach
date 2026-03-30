@@ -223,6 +223,15 @@ def check_all_replies(days=7, logger_callback=None):
                                         break
                     
                     if contact_id:
+                        # Lookup contact details for rich logging
+                        c_email, c_company, c_project = "Unknown", "Unknown", str(project_id)
+                        for c in contacts:
+                            if c['id'] == contact_id:
+                                c_email = c.get('email') or 'Unknown'
+                                c_company = c.get('company') or 'Unknown'
+                                c_project = c.get('project_id') or str(project_id)
+                                break
+                                
                         # 4. Fetch body for Replies (if not already fetched for bounce)
                         if not is_b and not body:
                             res_status, fd = mail.fetch(msg_id, "(RFC822)")
@@ -241,12 +250,12 @@ def check_all_replies(days=7, logger_callback=None):
 
                         # 5. Commit to Database
                         if is_b:
-                            msg = f"  [BOUNCE] {sender} (Subject: {subject_hdr})"
+                            msg = f"  ✅ [BOUNCE CATCH] Matched Contact: {c_email} | Company: {c_company} | Project: {c_project}"
                             print(msg)
                             if logger_callback: logger_callback(msg)
                             supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
                         else:
-                            msg = f"  [REPLY] {sender}"
+                            msg = f"  ✅ [REPLY CATCH] Matched Contact: {c_email} | Company: {c_company} | Project: {c_project}"
                             print(msg)
                             if logger_callback: logger_callback(msg)
                             
