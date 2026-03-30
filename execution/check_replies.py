@@ -206,7 +206,7 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 from_header = _decode_header_value(msg.get("From", ""))
                 subject_header = _decode_header_value(msg.get("Subject", ""))
                 sender = _extract_sender_email(from_header)
-
+                
                 # Extract Gmail metadata from the fetch response
                 # Format is usually [b'ID (X-GM-THRID 123 X-GM-MSGID 456 RFC822 {size})', b'...raw email...']
                 metadata_raw = msg_data[0][0].decode()
@@ -215,9 +215,12 @@ def check_replies_for_account(acct_email: str, acct_password: str, prospect_emai
                 message_id_gmail = re.search(r"X-GM-MSGID (\d+)", metadata_raw)
                 message_id_gmail = message_id_gmail.group(1) if message_id_gmail else None
 
+                # ALWAYS log every sender at INFO level for now so we can see what's happening
+                _log(f"  [Scan] From: {sender} | Subject: {subject_header[:30]}...")
+
                 # A. Direct Reply
                 if sender in prospect_emails:
-                    _log(f"  ✅ Reply: {sender}")
+                    _log(f"  ✅ Reply Match: {sender}")
                     
                     # Extract body for storage
                     email_body = _extract_body(msg)
