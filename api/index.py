@@ -920,10 +920,6 @@ def trigger_manual_verification():
                     if not c.get('email'):
                         job_in_mem['done'] += 1
                         job_in_mem['skipped'] += 1
-                    elif v_status and not force:
-                        # Skip if it already has ANY verification status (valid, invalid, risky, etc.)
-                        job_in_mem['done'] += 1
-                        job_in_mem['skipped'] += 1
                     else:
                         to_verify.append(c)
 
