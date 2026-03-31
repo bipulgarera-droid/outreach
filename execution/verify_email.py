@@ -77,9 +77,9 @@ def check_email(email: str) -> tuple[str, str]:
     code_real, msg_real = smtp_check(email)
     
     # LOGIC:
-    # 1. Catch-all (Liar) -> Always ALLOW (VALID). Because redchillies (liar) is good.
+    # 1. Catch-all (Liar) -> Mark as RISKY. Because redchillies (liar) accepts fakes.
     if code_stupid == 250:
-        return "valid", "domain_catch_all"
+        return "risky", "domain_catch_all"
 
     # 2. Honest Server (it rejected the stupid email)
     if code_real == 250:

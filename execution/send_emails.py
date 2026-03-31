@@ -101,6 +101,14 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
         for p in (proj_res.data or []):
             sender_groups[p['id']] = p.get('sender_group', 'all')
             
+    # === OSINT FALLBACK (APIFY / GOOGLE) ===
+    if not dry_run:
+        try:
+            from execution.serper_fallback import verify_risky_emails_bulk
+            verify_risky_emails_bulk(sequences, supabase)
+        except Exception as e:
+            logger.error(f"Failed to run Apify OSINT fallback: {e}")
+            
     stats = {'processed': 0, 'sent': 0, 'skipped': 0, 'errors': 0}
     
     for seq in sequences:
@@ -126,10 +134,16 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                     supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                 stats['skipped'] += 1
                 continue
-            elif v_status == 'risky':
-                _log(f"BOUNCE PROTECTION: Proceeding with {to_email} (Status: RISKY, Reason: {ed.get('verification_reason', '?')}).", level='warning')
-                # We proceed with risky emails as per user preference (Zero-Miss)
-                pass 
+            elif v_status == 'risky' or (v_status == 'valid' and 'domain_catch_all' in str(ed.get('verification_reason', ''))):
+                # Option 2 Strict Mode: Only proceed if OSINT fallback verified them.
+                if ed.get('serper_verified') is True:
+                    _log(f"OSINT BOUNCE PROTECTION: Proceeding with {to_email} (Risky, but Google Verified!).")
+                else:
+                    _log(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY/Catch-All, Not Google Verified). marking as skipped.", level='warning')
+                    if not dry_run:
+                        supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
+                    stats['skipped'] += 1
+                    continue
             
             # REPLY GUARD: Check if contact has replied — if so, cancel all their pending emails
             contact_status = supabase.table('contacts').select('status').eq('id', seq['contact_id']).execute()
