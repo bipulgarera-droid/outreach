@@ -937,6 +937,7 @@ def trigger_manual_verification():
                 MAX_WORKERS = 20
                 
                 valid_count = 0
+                risky_count = 0
                 skipped_count = 0
                 done_count = 0
                 risky_contacts = []
@@ -955,18 +956,17 @@ def trigger_manual_verification():
                                 }).eq('id', contact_id).execute()
                                 skipped_count += 1
                             else:
-                                valid_count += 1
                                 job.info(f"Verified {email}: {v_status.upper()}")
                                 
-                                # Track risky contacts for OSINT fallback
-                                v_reason = str(enrichment_data.get('verification_reason', ''))
-                                is_strict_risky = v_status == 'risky'
-                                if is_strict_risky:
-                                    # Create a dict that matches what verify_risky_contacts_bulk expects
+                                if v_status == 'risky':
+                                    risky_count += 1
+                                    # Track risky contacts for OSINT fallback
                                     c_obj = next((c for c in to_verify if c['id'] == contact_id), None)
                                     if c_obj:
                                         c_obj['enrichment_data'] = enrichment_data
                                         risky_contacts.append(c_obj)
+                                else:
+                                    valid_count += 1
                                         
                         except Exception as e:
                             logger.error(f"Verification worker error: {e}")
@@ -984,7 +984,7 @@ def trigger_manual_verification():
                         logger.error(f"Failed to run Serper OSINT fallback: {e}")
                         job.info(f"OSINT fallback failed: {e}")
 
-                job.success(f"Verification complete. Valid: {valid_count}, Skipped: {skipped_count}")
+                job.success(f"Verification complete. Valid: {valid_count}, Risky: {risky_count}, Skipped: {skipped_count}")
                 job.complete('completed')
 
             except Exception as e:
