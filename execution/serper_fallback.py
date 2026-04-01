@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 import requests
@@ -7,10 +8,23 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
+
+def _is_exact_email_match(email_lower: str, text: str) -> bool:
+    """Check if the email appears as a standalone string in text, not as part of a URL path or larger token.
+    
+    We use a regex word-boundary approach:
+    - The character before the email must be a space, punctuation, or start-of-string
+    - The character after must be a space, punctuation, or end-of-string
+    - This prevents matching 'chris@csp.agency' inside 'https://site.com/chris@csp.agency/profile'
+    """
+    pattern = r'(?:^|[\s,;:\'\"<>()\[\]{}|])' + re.escape(email_lower) + r'(?:$|[\s,;:\'\"<>()\[\]{}|.!?])'
+    return bool(re.search(pattern, text))
+
+
 def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
     """
-    Extracts all 'risky' emails (including Catch-Alls) from the provided contacts
-    that haven't been OSINT-verified yet, runs them through Serper.dev Google Search in bulk,
+    Extracts all 'risky' emails from the provided contacts that haven't been
+    OSINT-verified yet, runs them through Serper.dev Google Search in bulk,
     and updates the contact's enrichment_data with `serper_verified`: True/False.
     """
     to_verify = []
@@ -23,12 +37,9 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
             c['enrichment_data'] = ed
             
         v_status = ed.get('verification_status')
-        v_reason = str(ed.get('verification_reason', ''))
         
-        # Identify Risky emails (now includes domain_catch_all and timeouts)
-        is_strict_risky = v_status == 'risky' or (v_status == 'valid' and 'domain_catch_all' in v_reason)
-        
-        if is_strict_risky:
+        # Only risky emails need OSINT verification
+        if v_status == 'risky':
             has_been_checked = 'serper_verified' in ed
             if not has_been_checked:
                 email = c.get('email', '').strip()
@@ -55,21 +66,17 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
         email_to_contacts[email].append(c)
         
     for e, contact_list in email_to_contacts.items():
-        # Just grab the company text from the first contact mapping
         comp = contact_list[0].get('company', '').strip()
         emails_to_test.append((e, comp))
     
-    logger.info(f"OSINT FALLBACK: Initiating lightning-fast Serper API actor for {len(emails_to_test)} unique queries...")
+    logger.info(f"OSINT FALLBACK: Querying Serper API for {len(emails_to_test)} unique emails...")
     
     def test_serper(lead_data):
+        """Search Google for the exact email in quotes and verify it appears as a standalone match."""
         email, company = lead_data
-        # Query precisely the email to maximize recovery yield
         query = f'"{email}"'
         
-        payload = json.dumps({
-            "q": query,
-            "num": 10
-        })
+        payload = json.dumps({"q": query, "num": 10})
         headers = {
             'X-API-KEY': serper_key,
             'Content-Type': 'application/json'
@@ -77,63 +84,81 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
         import time
         for attempt in range(3):
             try:
-                res = requests.request("POST", "https://google.serper.dev/search", headers=headers, data=payload, timeout=20)
+                res = requests.post("https://google.serper.dev/search", headers=headers, data=payload, timeout=20)
                 if res.status_code == 429:
                     time.sleep(1.0)
                     continue
                 if res.status_code != 200:
-                    logger.error(f"API Error {res.status_code} for {email}: {res.text}")
-                    return email, False
+                    logger.error(f"  Serper API Error {res.status_code} for {email}: {res.text}")
+                    return email, False, None
                     
                 res_json = res.json()
                 organic = res_json.get('organic', [])
                 email_lower = email.lower()
                 
-                found = False
+                if not organic:
+                    logger.info(f"  🔍 {email}: Serper returned 0 organic results → DROPPED")
+                    return email, False, None
+                
+                # Strict matching: email must appear as a standalone token
                 for org in organic:
                     snippet = org.get('snippet', '').lower()
                     title = org.get('title', '').lower()
-                    if email_lower in snippet or email_lower in title:
-                        found = True
-                        break
-                return email, found
+                    link = org.get('link', '')
+                    
+                    if _is_exact_email_match(email_lower, snippet):
+                        matched_text = org.get('snippet', '')[:120]
+                        logger.info(f"  🔍 {email}: EXACT MATCH in snippet → RECOVERED")
+                        logger.info(f"     source: {link}")
+                        logger.info(f"     snippet: {matched_text}")
+                        return email, True, matched_text
+                    
+                    if _is_exact_email_match(email_lower, title):
+                        matched_text = org.get('title', '')[:120]
+                        logger.info(f"  🔍 {email}: EXACT MATCH in title → RECOVERED")
+                        logger.info(f"     source: {link}")
+                        return email, True, matched_text
+                
+                # No exact match found in any result
+                logger.info(f"  🔍 {email}: {len(organic)} results but NO exact email match → DROPPED")
+                return email, False, None
+                
             except Exception as ex:
                 if attempt == 2:
-                    logger.error(f"Serper API error for {email}: {ex}")
-                    return email, False
+                    logger.error(f"  Serper API error for {email}: {ex}")
+                    return email, False, None
                 time.sleep(1.0)
-        return email, False
+        return email, False, None
 
-    verified_emails = set()
+    # Results: email → (found, matched_snippet)
+    verified_emails = {}
     
-    # Max workers 4 to stay within respectful API concurrency limits
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         futures = [executor.submit(test_serper, lead) for lead in emails_to_test]
-        for idx, future in enumerate(concurrent.futures.as_completed(futures), 1):
-            email, found = future.result()
-            if found:
-                verified_emails.add(email)
+        for future in concurrent.futures.as_completed(futures):
+            email, found, snippet = future.result()
+            verified_emails[email] = (found, snippet)
 
     # Update the Database
     newly_verified = 0
     newly_rejected = 0
     
     for email, contact_list in email_to_contacts.items():
-        is_verified = email in verified_emails
-        if is_verified:
+        found, snippet = verified_emails.get(email, (False, None))
+        if found:
             newly_verified += 1
-            logger.info(f"  ✅ [OSINT RECOVERED] Found {email} on Google.")
         else:
             newly_rejected += 1
-            logger.info(f"  🚫 [OSINT DROPPED] Could not confidently verify {email} on Google.")
             
         for c in contact_list:
             c_id = c['id']
             ed = c.get('enrichment_data') or {}
-            ed['serper_verified'] = is_verified
+            ed['serper_verified'] = found
+            if snippet:
+                ed['serper_snippet'] = snippet
             supabase_client.table('contacts').update({'enrichment_data': ed}).eq('id', c_id).execute()
 
-    logger.info(f"OSINT FALLBACK COMPLETE: Recovered {newly_verified} | Dropped {newly_rejected}.")
+    logger.info(f"OSINT FALLBACK COMPLETE: ✅ Recovered {newly_verified} | 🚫 Dropped {newly_rejected}.")
 
 
 if __name__ == "__main__":
