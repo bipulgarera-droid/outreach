@@ -1469,7 +1469,7 @@ For EACH email:
 - Change ~30% of wording while keeping the same meaning, intent, and length
 - **CRITICAL**: Maintain extremely natural, conversational, human language. Do NOT use forced or awkward synonyms (e.g. do not change "manually" to "by hand", keep natural industry standard words).
 - **CRITICAL DELIVERABILITY**: DO NOT use ANY of these exact spam trigger phrases: {spam_words}
-- CRITICAL: Preserve ALL template variables EXACTLY as written. Do NOT alter the spelling or format inside the braces (e.g. keep {{{{first_name}}}} exactly as-is, do not change to {{{{firstname}}}}).
+- CRITICAL: Preserve ALL template variables EXACTLY as written. Do NOT alter the spelling or format inside the braces.
 - Do NOT add new facts or claims not in the original
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
@@ -1485,7 +1485,7 @@ COMPANY SCRAPED CONTEXT:
 
 EMAIL_1 RULES:
 Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
-1. The Observation: Start by mentioning a specific, relevant detail from their business context (e.g., their unique process or target audience) so they know this isn't an automated blast. Do NOT reuse the original opening line. CRITICAL: Do NOT use tentative phrasing like "Looks like" or "It seems". State their business facts confidently (e.g. "Noticed that [Company] helps...", "Since you help...").
+1. The Observation: Start by mentioning a specific, relevant detail from their business context (e.g., their unique process or target audience) so they know this isn't an automated blast. Do NOT reuse the original opening line. CRITICAL: Do NOT use tentative phrasing like "Looks like" or "It seems". State their business facts confidently (e.g. "Noticed that [Company] helps...", "Since you help..."). CRITICAL: The names mentioned in the scraped context are likely the founders/recipients! Do NOT refer to them in the third person as if they are customers (e.g. do not say "helps operators like Bill").
 2. The Bridge: Write a smooth transition connecting your observation to the problem your original offer solves. Make it sound completely natural and conversational. DO NOT use em-dashes (— or -) to connect thoughts. Use simple commas or short sentences.
 3. The Offer & Proof: Naturally weave in the original core offer and proof statements. You may slightly rephrase them to fit the conversational flow, but do NOT change the core value proposition, numbers, or factual claims.
 4. The CTA: Keep the final Call to Action essentially identical to the original.
@@ -1505,6 +1505,11 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
         )
         # Strip markdown emphasis symbols at the code level so they physically cannot survive
         content = response.text.strip().replace('*', '').replace('_', '')
+        # Fix Gemini dropping the underscore in variables
+        import re
+        content = re.sub(r'\{\{\s*first_?name\s*\}\}', '{{first_name}}', content, flags=re.IGNORECASE)
+        content = re.sub(r'\{\{\s*First_?Name\s*\}\}', '{{first_name}}', content, flags=re.IGNORECASE)
+        
         if '```json' in content: content = content.split('```json')[1].split('```')[0].strip()
         elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
 
