@@ -1472,7 +1472,7 @@ For EACH email:
 - CRITICAL: Preserve ALL template variables exactly as written: {{{{name}}}}, {{{{first_name}}}}, {{{{company}}}}, {{{{location}}}}, {{{{niche}}}}, {{{{sender_first_name}}}}, etc.
 - Do NOT add new facts or claims not in the original
 - No citations, no footnotes, no bracketed numbers like [1]
-- Plain text only, no HTML{contact_info}"""
+- Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
 
         if company_context:
             system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
