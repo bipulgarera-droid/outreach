@@ -1503,7 +1503,8 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
             model='gemini-2.0-flash',
             contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
         )
-        content = response.text.strip()
+        # Strip markdown emphasis symbols at the code level so they physically cannot survive
+        content = response.text.strip().replace('*', '').replace('_', '')
         if '```json' in content: content = content.split('```json')[1].split('```')[0].strip()
         elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
 
