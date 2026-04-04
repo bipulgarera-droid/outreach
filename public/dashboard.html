@@ -1567,7 +1567,7 @@
                                                 if (ed.company_context) {
                                                     const ctxString = encodeURIComponent(JSON.stringify(ed.company_context));
                                                     const compString = encodeURIComponent(c.company || '');
-                                                    return \`<button onclick="showCompanyContextModal('\${compString}', '\${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">View</button>\`;
+                                                    return `<button onclick="showCompanyContextModal('${compString}', '${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">View</button>`;
                                                 }
                                                 return '<span class="text-gray-600 text-xs">—</span>';
                                             } catch(e) { return '<span class="text-gray-600 text-xs">—</span>'; }
