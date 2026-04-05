@@ -1915,7 +1915,7 @@
             const ta = document.getElementById('bulk-edit-textarea');
             const counter = document.getElementById('bulk-line-counter');
             ta.addEventListener('input', () => {
-                const lines = ta.value.split('\\n').length;
+                const lines = ta.value.split('\n').length;
                 if (lines !== rowCount) {
                     counter.innerHTML = `<span class="text-amber-500 font-bold">⚠️ ${lines} lines detected (Expected ${rowCount})</span>`;
                 } else {
@@ -1930,13 +1930,13 @@
             const ta = document.getElementById('bulk-edit-textarea');
             
             // Allow empty lines, split literally
-            const lines = ta.value.split('\\n');
+            const lines = ta.value.split('\n');
             const btn = document.getElementById('btnSubmitBulkEdit');
 
             if (lines.length > expectedCount) {
-                if (!confirm(\`Warning: You provided \${lines.length} lines but there are only \${expectedCount} contacts.\n\nThe extra lines will be ignored. Proceed?\`)) return;
+                if (!confirm(`Warning: You provided ${lines.length} lines but there are only ${expectedCount} contacts.\n\nThe extra lines will be ignored. Proceed?`)) return;
             } else if (lines.length < expectedCount) {
-                if (!confirm(\`Warning: You provided \${lines.length} lines but there are \${expectedCount} contacts.\n\nThe remaining \${expectedCount - lines.length} contacts will retain their old values. Proceed?\`)) return;
+                if (!confirm(`Warning: You provided ${lines.length} lines but there are ${expectedCount} contacts.\n\nThe remaining ${expectedCount - lines.length} contacts will retain their old values. Proceed?`)) return;
             }
 
             btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
