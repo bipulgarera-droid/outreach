@@ -127,6 +127,7 @@ def find_website_serper(company: str, niche: str = '') -> Optional[str]:
     query_parts = [company.strip()]
     if niche:
         query_parts.append(niche.strip())
+    query_parts.append('website')
     query = ' '.join(query_parts)
     
     headers = {
@@ -323,11 +324,16 @@ def enrich_single_contact(contact: dict, project_info: dict = None) -> Optional[
     company = contact.get('company') or contact.get('name') or ''
     niche = ''
     
+    # Junk niche values to ignore
+    _junk_niches = {'manual', 'growthscout', 'unknown', 'new', 'enriched', ''}
+    
     # Determine niche: contact niche > project niche > project name
-    if contact.get('niche'):
+    contact_niche = (contact.get('niche') or '').strip().lower()
+    if contact_niche and contact_niche not in _junk_niches:
         niche = contact['niche']
     elif project_info:
-        niche = project_info.get('niche') or project_info.get('name') or ''
+        project_niche = (project_info.get('niche') or '').strip()
+        niche = project_niche if project_niche else (project_info.get('name') or '')
     
     existing_email = (contact.get('email') or '').strip()
     existing_instagram = (contact.get('instagram') or '').strip()
