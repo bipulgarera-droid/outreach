@@ -1587,7 +1587,7 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None) -> list:
+def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, personalization_prompt: str = None) -> list:
     """Paraphrase multiple email bodies in ONE Gemini Flash call.
     Returns a list of paraphrased strings in the same order as input.
     If anything fails, returns originals as fallback."""
@@ -1629,8 +1629,17 @@ COMPANY SCRAPED CONTEXT:
 
 EMAIL_1 RULES:
 Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
-IMPORTANT: Work BACKWARDS from the offer. First, identify the core problem that the original email's offer solves (e.g. "repetitive SEO fulfillment eating up time"). Then scan the 4 context points and pick the ONE that most strongly implies the prospect would face that exact problem (e.g. if they manage marketing for many clients, that implies heavy fulfillment load). Ignore context points that are interesting but unrelated to the problem your offer solves.
-
+"""
+            if personalization_prompt:
+                system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
+Focus the observation SPECIFICALLY on: "{personalization_prompt}". 
+If details matching "{personalization_prompt}" are explicitly present in the COMPANY SCRAPED CONTEXT above, you MUST use them.
+If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context that anchors the offer.
+"""
+            else:
+                system += """IMPORTANT: Work BACKWARDS from the offer. First, identify the core problem that the original email's offer solves (e.g. "repetitive SEO fulfillment eating up time"). Then scan the 4 context points and pick the ONE that most strongly implies the prospect would face that exact problem. Ignore context points that are interesting but unrelated to the problem your offer solves.
+"""
+            system += """
 1. The Observation: Confidently state the chosen context detail so they know you researched them. It MUST be a specific, concrete fact (e.g. "offers 12 marketing campaigns per year", "manages fulfillment for 200+ clients"). BAD EXAMPLES (DO NOT WRITE THESE): "helps operators free up time", "is all about giving people time back", "focuses on helping businesses grow". These are vague summaries, not observations. Do NOT reuse the original opening line. Do NOT use tentative phrasing like "Looks like" or "It seems". The names mentioned in the scraped context are likely the founders/recipients, do NOT refer to them in the third person.
 2. The Bridge: Write exactly one sentence that connects their specific situation to the problem your offer solves. The reader should think "yeah, that IS my problem" before they even see the offer. DO NOT use em-dashes.
 3. The Offer & Proof: Naturally weave in the original core offer and proof statements. Do NOT change the core value proposition, numbers, or factual claims. IMPORTANT: If the original email mentions a specific client or case study name (e.g. "RankJacker"), keep that name in the output.
@@ -1684,6 +1693,7 @@ def create_sequences():
         data = request.json
         project_id = data.get('project_id')
         contact_ids = data.get('contact_ids', [])
+        personalization_prompt = data.get('personalization_prompt')
         
         if not contact_ids or not project_id:
             return jsonify({'error': 'No contacts or project_id selected'}), 400
@@ -1707,7 +1717,7 @@ def create_sequences():
         import threading
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        def run_in_background(proj_id, contacts_data, templates_data):
+        def run_in_background(proj_id, contacts_data, templates_data, custom_prompt=None):
             import re as _re
             import json as _json
 
@@ -1871,7 +1881,7 @@ def create_sequences():
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
-                    bodies_para = paraphrase_texts_batch(bodies_raw, context=variables, company_context=company_context)
+                    bodies_para = paraphrase_texts_batch(bodies_raw, context=variables, company_context=company_context, personalization_prompt=custom_prompt)
 
                     # ── SMART REFRESH / DEDUP CHECK ──
                     # Instead of a simple "already exists = skip", we're smarter:
@@ -1958,7 +1968,9 @@ def create_sequences():
                     try:
                         c, e = fut.result()
                         created_total += c
-                        errors_total += e
+                        created, errors = fut.result()
+                        created_total += created
+                        errors_total += errors
                     except Exception as ex:
                         errors_total += 1
                         logger.error(f"Future error: {ex}")
@@ -1967,6 +1979,7 @@ def create_sequences():
 
 
         # Launch background thread (daemon=False so it outlives the request)
+        logger.info(f"Background sequence creation started for {len(all_contacts_data)} contacts.")
         thread = threading.Thread(target=run_in_background, args=(project_id, all_contacts_data, templates.data), daemon=False)
         thread.start()
 

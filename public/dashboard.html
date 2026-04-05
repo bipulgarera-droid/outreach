@@ -4024,12 +4024,15 @@
             if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
             if (!confirm(`Create sequences for ${ids.length} contact(s)?\n\nEach step is AI-paraphrased (~15-30s per contact). You can navigate away safely.`)) return;
 
+            const customPrompt = window.prompt("Optional: Provide a simple instruction for AI personalization (e.g., 'pick data about awards'). Leave blank to let AI decide.");
+            if (customPrompt === null) return; // User canceled
+
             localStorage.setItem('seqJob', JSON.stringify({ ids, started: Date.now() }));
             _showSeqBanner(ids);
             try {
                 const res = await apiFetch('/api/sequences/create', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contact_ids: ids })
+                    body: JSON.stringify({ contact_ids: ids, personalization_prompt: customPrompt })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
