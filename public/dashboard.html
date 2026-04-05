@@ -1533,12 +1533,12 @@
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
                                 <th class="px-4 py-3 text-left font-medium w-8"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="rounded bg-gray-800 border-gray-600"></th>
-                                <th class="px-4 py-3 text-left font-medium">Name</th>
-                                <th class="px-4 py-3 text-left font-medium">Company</th>
+                                <th class="px-4 py-3 text-left font-medium group/th">Name <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('name', 'Name')"></i></th>
+                                <th class="px-4 py-3 text-left font-medium group/th">Company <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('company', 'Company')"></i></th>
                                 ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium text-fuchsia-400">Company Info</th>'}
-                                ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium text-cyan-400">Website</th>'}
-                                ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium">Phone</th>'}
-                                <th class="px-4 py-3 text-left font-medium">Email</th>
+                                ${isReplied ? '' : `<th class="px-4 py-3 text-left font-medium text-cyan-400 group/th">Website <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-cyan-700 opacity-0 group-hover/th:opacity-100 hover:text-cyan-300 cursor-pointer transition-opacity" onclick="showBulkEditModal('website', 'Website')"></i></th>`}
+                                ${isReplied ? '' : `<th class="px-4 py-3 text-left font-medium group/th">Phone <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('phone', 'Phone')"></i></th>`}
+                                <th class="px-4 py-3 text-left font-medium group/th">Email <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('email', 'Email')"></i></th>
                                 ${isReplied ? `
                                 <th class="px-4 py-3 text-left font-medium text-violet-400">Sender Email</th>
                                 <th class="px-4 py-3 text-left font-medium text-emerald-400 w-1/4">Reply Body</th>
@@ -1856,6 +1856,126 @@
             } catch (e) {
                 showToast('❌ Update failed: ' + e.message);
                 btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Save Changes';
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        // ── Bulk Edit Modal ──────────────────────────────────────────────────
+        function showBulkEditModal(columnKey, columnTitle) {
+            if (!contactsCache || contactsCache.length === 0) {
+                return showToast('❌ No active contacts to edit.');
+            }
+            
+            // Extract the current values, maintaining exact sequence
+            const values = contactsCache.map(c => {
+                let val = c[columnKey] || '';
+                
+                // Fallback to enrichment_data if website/company are missing natively
+                if (!val && (columnKey === 'website' || columnKey === 'company')) {
+                    try {
+                        const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                        val = ed[columnKey] || '';
+                    } catch(e) {}
+                }
+                return val.toString().trim();
+            });
+            const textContent = values.join('\n');
+            const rowCount = contactsCache.length;
+
+            openModal(`
+                <div class="p-6 max-w-3xl mx-auto">
+                    <h2 class="text-xl font-black text-white mb-2 tracking-tight flex items-center gap-2">
+                        <i data-lucide="layers" class="text-violet-500 w-5 h-5"></i> 
+                        Bulk Edit: <span class="text-violet-400">${columnTitle}</span>
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-4">Edit the values in the text area below. <strong class="text-gray-300">Important:</strong> Ensure you maintain exactly one entry per line, mapping 1-to-1 with the ${rowCount} currently displayed contacts.</p>
+                    
+                    <input type="hidden" id="bulk-edit-column" value="${columnKey}">
+                    <input type="hidden" id="bulk-edit-count" value="${rowCount}">
+                    
+                    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden relative">
+                        <!-- Line Numbers (Optional visual touch out of scope, skipping complex overlays) -->
+                        <textarea id="bulk-edit-textarea" rows="20" wrap="off" class="w-full bg-transparent p-4 text-sm text-gray-300 font-mono outline-none resize-none whitespace-pre">${textContent.replace(/</g, '&lt;')}</textarea>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mt-5">
+                        <div class="text-xs text-gray-500" id="bulk-line-counter">Expected: ${rowCount} lines</div>
+                        <div class="flex gap-3">
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                            <button onclick="submitBulkEdit()" id="btnSubmitBulkEdit" class="bg-gradient-to-br from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white text-xs font-bold uppercase tracking-widest py-2.5 px-6 rounded-xl transition-all shadow-xl shadow-violet-900/30 flex items-center justify-center gap-2">
+                                <i data-lucide="check-circle" class="w-4 h-4"></i> Apply to ${rowCount} rows
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `);
+            if (window.lucide) lucide.createIcons();
+            
+            // Add slight listener on textarea to warn if line count shifts
+            const ta = document.getElementById('bulk-edit-textarea');
+            const counter = document.getElementById('bulk-line-counter');
+            ta.addEventListener('input', () => {
+                const lines = ta.value.split('\\n').length;
+                if (lines !== rowCount) {
+                    counter.innerHTML = `<span class="text-amber-500 font-bold">⚠️ ${lines} lines detected (Expected ${rowCount})</span>`;
+                } else {
+                    counter.innerHTML = `Expected: ${rowCount} lines`;
+                }
+            });
+        }
+
+        async function submitBulkEdit() {
+            const columnKey = document.getElementById('bulk-edit-column').value;
+            const expectedCount = parseInt(document.getElementById('bulk-edit-count').value, 10);
+            const ta = document.getElementById('bulk-edit-textarea');
+            
+            // Allow empty lines, split literally
+            const lines = ta.value.split('\\n');
+            const btn = document.getElementById('btnSubmitBulkEdit');
+
+            if (lines.length > expectedCount) {
+                if (!confirm(\`Warning: You provided \${lines.length} lines but there are only \${expectedCount} contacts.\n\nThe extra lines will be ignored. Proceed?\`)) return;
+            } else if (lines.length < expectedCount) {
+                if (!confirm(\`Warning: You provided \${lines.length} lines but there are \${expectedCount} contacts.\n\nThe remaining \${expectedCount - lines.length} contacts will retain their old values. Proceed?\`)) return;
+            }
+
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const updates = [];
+            // Zip contactsCache with the lines
+            for (let i = 0; i < expectedCount; i++) {
+                if (i < lines.length) {
+                    const newVal = lines[i].trim();
+                     // Only register an update if we have a value to set or we are explicitly clearing it 
+                     // Wait, user might intentionally clear something. Let's send it regardless as long as it's within bounds.
+                    updates.push({
+                        id: contactsCache[i].id,
+                        [columnKey]: newVal === '' ? null : newVal
+                    });
+                }
+            }
+
+            if (updates.length === 0) {
+                closeModal();
+                return;
+            }
+
+            try {
+                const res = await apiFetch('/api/contacts/bulk_update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(\`✅ Successfully updated \${data.updated || updates.length} rows\`);
+                closeModal();
+                loadContent(); // Refresh the table
+            } catch (e) {
+                showToast('❌ Bulk update failed: ' + e.message);
+                btn.innerHTML = \`<i data-lucide="check-circle" class="w-4 h-4"></i> Apply to \${expectedCount} rows\`;
                 btn.disabled = false;
                 if (window.lucide) lucide.createIcons();
             }

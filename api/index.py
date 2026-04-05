@@ -515,6 +515,48 @@ def update_contact(contact_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/bulk_update', methods=['POST'])
+def bulk_update_contacts():
+    """Bulk update fields for multiple contacts."""
+    try:
+        data = request.json
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return jsonify({'error': 'No updates provided'}), 400
+
+        allowed = ['name', 'company', 'bio', 'linkedin_url', 'email', 'instagram',
+                   'website', 'phone', 'icebreaker', 'status', 'notes']
+        
+        updated_count = 0
+        from concurrent.futures import ThreadPoolExecutor
+        
+        def process_update(u):
+            c_id = u.get('id')
+            if not c_id: return False
+            
+            update_data = {k: v for k, v in u.items() if k in allowed and k != 'id'}
+            if not update_data: return False
+            
+            update_data['updated_at'] = datetime.utcnow().isoformat()
+            try:
+                supabase.table('contacts').update(update_data).eq('id', c_id).execute()
+                return True
+            except Exception as ex:
+                print(f"Error bulk updating {c_id}: {ex}")
+                return False
+                
+        # Run updates in parallel
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(process_update, updates))
+            
+        updated_count = sum(1 for r in results if r)
+        
+        return jsonify({'message': 'Bulk update processed', 'updated': updated_count, 'total': len(updates)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/add', methods=['POST'])
 def add_contact_manual():
     """Manually add a single contact."""
