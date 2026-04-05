@@ -504,7 +504,8 @@ def update_contact(contact_id):
     """Update a contact."""
     try:
         data = request.json
-        allowed = ['name', 'bio', 'linkedin_url', 'email', 'instagram', 'icebreaker', 'status']
+        allowed = ['name', 'company', 'bio', 'linkedin_url', 'email', 'instagram',
+                   'website', 'phone', 'icebreaker', 'status', 'notes']
         update_data = {k: v for k, v in data.items() if k in allowed}
         update_data['updated_at'] = datetime.utcnow().isoformat()
         

@@ -155,8 +155,11 @@ def find_website_serper(company: str, niche: str = '') -> Optional[str]:
         for result in data.get('organic', []):
             url = result.get('link', '')
             if _is_company_site(url):
-                logger.info(f"  🌐 Found website (organic): {url}")
-                return url
+                # Strip to homepage root — avoid slugs, paths, image URLs
+                parsed = urlparse(url)
+                homepage = f"{parsed.scheme}://{parsed.netloc}/"
+                logger.info(f"  🌐 Found website (organic): {homepage}")
+                return homepage
                 
     except Exception as e:
         logger.warning(f"Website search error for '{company}': {e}")

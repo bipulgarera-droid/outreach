@@ -1610,7 +1610,10 @@
                                         <span class="status-${c.status} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-80">${c.status || 'new'}</span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button onclick="showContactDetail('${c.id}')" class="text-gray-400 hover:text-white mr-2">
+                                        <button onclick="showEditContactModal('${c.id}')" class="text-gray-400 hover:text-blue-400 mr-2" title="Edit Contact">
+                                            <i data-lucide="edit-3" class="w-4 h-4 inline"></i>
+                                        </button>
+                                        <button onclick="showContactDetail('${c.id}')" class="text-gray-400 hover:text-white mr-2" title="View Detail">
                                             <i data-lucide="eye" class="w-4 h-4 inline"></i>
                                         </button>
                                         <button onclick="deleteContact('${c.id}')" class="text-gray-400 hover:text-red-400">
@@ -1730,10 +1733,134 @@
                     btn.className = 'px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-t-lg transition-all text-violet-400 bg-violet-500/10 border-b-2 border-violet-500';
                 } else {
                     panel.classList.add('hidden');
-                    btn.className = 'px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-t-lg transition-all text-gray-500 hover:text-gray-300';
+                    btn.className = 'px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-t-lg transition-all text-gray-500 hover:text-gray-300 border-b-2 border-transparent hover:border-gray-700';
                 }
             });
         }
+
+        // ── Edit Contact Modal ──────────────────────────────────────────────
+        async function showEditContactModal(contactId) {
+            showToast('Loading contact...');
+            try {
+                const res = await apiFetch(`/api/contacts/${contactId}`);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const c = data.contact;
+                let websiteUrl = '';
+                try {
+                    const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                    websiteUrl = c.website || ed.website || '';
+                } catch(e) { }
+
+                openModal(`
+                    <div class="p-6 max-w-2xl mx-auto">
+                        <h2 class="text-xl font-black text-white mb-4 tracking-tight">Edit Contact</h2>
+                        <input type="hidden" id="edit-contact-id" value="${c.id}">
+                        <div class="grid grid-cols-2 gap-3 mb-5">
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Name</label>
+                                <input id="edit-name" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.name || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Company</label>
+                                <input id="edit-company" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.company || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Email</label>
+                                <input id="edit-email" type="email" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.email || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Phone</label>
+                                <input id="edit-phone" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.phone || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Website</label>
+                                <input id="edit-website" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${websiteUrl.replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">LinkedIn</label>
+                                <input id="edit-linkedin" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.linkedin_url || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Instagram</label>
+                                <input id="edit-instagram" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none" value="${(c.instagram || '').replace(/"/g, '&quot;')}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Status</label>
+                                <select id="edit-status" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none appearance-none">
+                                    <option value="new" ${c.status === 'new' ? 'selected' : ''}>New</option>
+                                    <option value="enriched" ${c.status === 'enriched' ? 'selected' : ''}>Enriched</option>
+                                    <option value="icebreaker_ready" ${c.status === 'icebreaker_ready' ? 'selected' : ''}>Icebreaker Ready</option>
+                                    <option value="in_sequence" ${c.status === 'in_sequence' ? 'selected' : ''}>In Sequence</option>
+                                    <option value="replied" ${c.status === 'replied' ? 'selected' : ''}>Replied</option>
+                                    <option value="bounced" ${c.status === 'bounced' ? 'selected' : ''}>Bounced</option>
+                                    <option value="completed" ${c.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Bio / Notes</label>
+                                <textarea id="edit-bio" rows="2" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none resize-none">${(c.bio || '').replace(/</g, '&lt;')}</textarea>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1 block">Icebreaker</label>
+                                <textarea id="edit-icebreaker" rows="3" class="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-blue-500 outline-none resize-none">${(c.icebreaker || '').replace(/</g, '&lt;')}</textarea>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 mt-4">
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                            <button onclick="submitEditContact()" id="btnSubmitEditContact" class="flex-1 bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white text-xs font-bold uppercase tracking-widest py-2.5 rounded-xl transition-all shadow-xl shadow-blue-900/30 flex items-center justify-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                `);
+                if (window.lucide) lucide.createIcons();
+            } catch (e) {
+                showToast('❌ Failed to load contact: ' + e.message);
+            }
+        }
+
+        async function submitEditContact() {
+            const id = document.getElementById('edit-contact-id').value;
+            const btn = document.getElementById('btnSubmitEditContact');
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const payload = {
+                name: document.getElementById('edit-name').value.trim() || null,
+                company: document.getElementById('edit-company').value.trim() || null,
+                email: document.getElementById('edit-email').value.trim() || null,
+                phone: document.getElementById('edit-phone').value.trim() || null,
+                website: document.getElementById('edit-website').value.trim() || null,
+                linkedin_url: document.getElementById('edit-linkedin').value.trim() || null,
+                instagram: document.getElementById('edit-instagram').value.trim() || null,
+                status: document.getElementById('edit-status').value,
+                bio: document.getElementById('edit-bio').value.trim() || null,
+                icebreaker: document.getElementById('edit-icebreaker').value.trim() || null,
+            };
+
+            try {
+                const res = await apiFetch(`/api/contacts/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast('✅ Contact updated successfully');
+                closeModal();
+                loadContent(); // Refresh the table
+            } catch (e) {
+                showToast('❌ Update failed: ' + e.message);
+                btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Save Changes';
+                btn.disabled = false;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
 
         async function submitManualContact() {
             const btn = document.getElementById('btnSubmitContact');
