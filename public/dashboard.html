@@ -3858,9 +3858,12 @@
             const msg = `Enrich ${targetIds.length} contact(s) with deep company data using Jina and Gemini?`;
             if (!confirm(msg)) return;
 
+            const customPrompt = window.prompt("Optional: Provide a specific detail you want Gemini to extract (e.g., 'pricing plans', 'founder name'). Leave blank for default extraction.");
+            if (customPrompt === null) return; // User canceled
+
             showToast('🏢 Company enrichment started in background...');
             try {
-                const body = JSON.stringify({ limit: 500, contact_ids: targetIds, project_id: currentProjectId });
+                const body = JSON.stringify({ limit: 500, contact_ids: targetIds, project_id: currentProjectId, custom_prompt: customPrompt || null });
                 const res = await apiFetch('/api/contacts/enrich_company', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
                 const data = await res.json();
 

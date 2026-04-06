@@ -883,13 +883,14 @@ def trigger_company_enrichment():
         limit = data.get('limit', 500)
         contact_ids = data.get('contact_ids', [])
         project_id = data.get('project_id')
+        custom_prompt = data.get('custom_prompt')
         
         import threading
         from execution.enrich_company import enrich_companies_bulk
         
         def run_company_enrichment_task():
             logger.info(f"Starting background company enrichment task (limit={limit}, project={project_id}, ids_received={len(contact_ids)})")
-            enrich_companies_bulk(limit=limit, project_id=project_id, contact_ids=contact_ids)
+            enrich_companies_bulk(limit=limit, project_id=project_id, contact_ids=contact_ids, custom_prompt=custom_prompt)
             logger.info("Background company enrichment task complete.")
 
         thread = threading.Thread(target=run_company_enrichment_task)

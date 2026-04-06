@@ -39,9 +39,9 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client, job_logger
         
         # Only risky emails need OSINT verification
         if v_status == 'risky':
-            email = c.get('email', '').strip()
-            company = c.get('company', '').strip()
-            if email and '@' in email and company:
+            email = c.get('email') or ''
+            email = str(email).strip()
+            if email and '@' in email:
                 to_verify.append(c)
                     
     if not to_verify:

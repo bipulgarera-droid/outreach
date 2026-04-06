@@ -54,7 +54,7 @@ def scrape_website_with_jina(url: str) -> Optional[str]:
         logger.error(f"    Jina scrape error: {e}")
         return None
 
-def extract_company_context(markdown_text: str) -> Optional[Dict]:
+def extract_company_context(markdown_text: str, custom_prompt: Optional[str] = None) -> Optional[Dict]:
     """Use Gemini to extract the 4-pillar context from the raw markdown."""
     if not GEMINI_API_KEY:
         logger.error("    No GEMINI_API_KEY configured.")
@@ -77,6 +77,9 @@ Output a clean JSON object exactly matching this structure, with NO markdown for
   "proof_of_success": "Case Studies, Testimonials, Notable Clients, Awards, Metrics"
 }
 """
+    if custom_prompt:
+        system_instruction += f"\n\nUSER'S CUSTOM EXTRACTION REQUEST:\n*** {custom_prompt} ***\nPlease ensure you extract this specific detail and heavily prioritize it! If it doesn't clearly fit into one of the exact JSON schema fields, append it prominently to 'offerings_and_positioning' or 'mission_and_about' so the user sees it.\n\n"
+
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
@@ -106,7 +109,7 @@ Output a clean JSON object exactly matching this structure, with NO markdown for
         logger.error(f"    Gemini extraction error: {e}")
         return None
 
-def enrich_companies_bulk(limit: int = 50, project_id: str = None, contact_ids: list = None, dry_run: bool = False) -> dict:
+def enrich_companies_bulk(limit: int = 50, project_id: str = None, contact_ids: list = None, dry_run: bool = False, custom_prompt: str = None) -> dict:
     from supabase import create_client
     
     supabase_url = os.getenv('SUPABASE_URL')
