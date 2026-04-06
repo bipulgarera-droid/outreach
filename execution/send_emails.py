@@ -137,7 +137,6 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                         supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                     stats['skipped'] += 1
                     continue
-            
             # REPLY GUARD: Check if contact has replied — if so, cancel all their pending emails
             contact_status = supabase.table('contacts').select('status').eq('id', seq['contact_id']).execute()
             if contact_status.data and contact_status.data[0].get('status') == 'replied':
@@ -164,7 +163,8 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             is_pranav = "pranavarora" in account.email.lower()
             sender_name = "Pranav" if is_pranav else "Bipul"
             
-            final_body = seq['body']
+            final_body = seq.get('body') or ""
+            final_subject = seq.get('subject') or "Following Up"
             if is_pranav:
                 final_body = final_body.replace("Bipul", "Pranav").replace("bipul", "pranav")
             # -------------------------------
@@ -173,7 +173,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             res = pool.send_email(
                 account=account,
                 to_addr=to_email,
-                subject=seq['subject'],
+                subject=final_subject,
                 body_html=final_body,
                 sender_name=sender_name,
                 dry_run=dry_run
