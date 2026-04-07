@@ -2920,7 +2920,7 @@
                 const res = await fetch('/api/daily-run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ limit: 600, dry_run: false, project_id: currentProjectId })
+                    body: JSON.stringify({ limit: 99999, dry_run: false, project_id: currentProjectId })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -2966,7 +2966,7 @@
                     body: JSON.stringify({
                         project_id: currentProjectId,
                         contact_ids: selectedIds,
-                        limit: 600
+                        limit: 99999
                     })
                 });
                 const data = await res.json();
