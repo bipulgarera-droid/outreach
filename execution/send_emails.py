@@ -223,15 +223,23 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
             if res.get('success'):
                 if not dry_run:
                     # ── ATOMIC DUPLICATE GUARD ──────────────────────────────
-                    # Re-check the status right before marking as sent to prevent
-                    # double sends if daily_send is clicked twice concurrently.
+                    # Re-check the status and scheduled_at right before marking as sent
+                    # to prevent sending steps that were just rescheduled into the future
+                    # by a preceding step in this exact same memory loop.
                     recheck = supabase.table('email_sequences') \
-                        .select('status') \
+                        .select('status, scheduled_at') \
                         .eq('id', seq['id']) \
                         .single() \
                         .execute()
                     if not recheck.data or recheck.data.get('status') != 'pending':
-                        logger.warning(f"  Skipping update — seq {seq['id']} is no longer pending (was it sent already?). Status: {recheck.data.get('status') if recheck.data else 'missing'}")
+                        logger.warning(f"  Skipping update — seq {seq['id']} is no longer pending (was it sent already?).")
+                        stats['skipped'] += 1
+                        stats['processed'] += 1
+                        continue
+                        
+                    # CRITICAL: Prevent sending Step 3 immediately after Step 2 if Step 3 was just rescheduled
+                    if recheck.data.get('scheduled_at') and recheck.data.get('scheduled_at') > datetime.utcnow().isoformat():
+                        logger.warning(f"  Skipping seq {seq['id']} — it was rescheduled to the future ({recheck.data.get('scheduled_at')}) by a preceding step.")
                         stats['skipped'] += 1
                         stats['processed'] += 1
                         continue

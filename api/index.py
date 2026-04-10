@@ -573,13 +573,44 @@ def add_contact_manual():
         if not name and not email:
             return jsonify({'error': 'At least a name or email is required'}), 400
 
+        # Helper for domain extraction
+        from urllib.parse import urlparse
+        def _get_domain(url_str):
+            if not url_str: return ""
+            try:
+                nl = urlparse(url_str).netloc.lower()
+                if nl.startswith('www.'): nl = nl[4:]
+                parts = nl.split('.')
+                return ".".join(parts[-2:]) if len(parts) >= 2 else nl
+            except: return ""
+
+        new_domain = ""
+        if email and '@' in email:
+            new_domain = email.split('@')[-1].lower()
+        elif data.get('website'):
+            new_domain = _get_domain(data.get('website'))
+
+        GENERIC_DOMAINS = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'me.com', 'msn.com', 'live.com'}
+
         # Dedup check
-        existing = supabase.table('contacts').select('id, name, email, linkedin_url').eq('project_id', project_id).execute()
+        existing = supabase.table('contacts').select('id, name, email, linkedin_url, website').eq('project_id', project_id).execute()
         for row in (existing.data or []):
             if email and row.get('email') and row['email'].lower() == email.lower():
                 return jsonify({'error': f'A contact with email {email} already exists'}), 409
             if linkedin_url and row.get('linkedin_url') and row['linkedin_url'].lower().rstrip('/') == linkedin_url.lower().rstrip('/'):
                 return jsonify({'error': f'A contact with that LinkedIn URL already exists'}), 409
+                
+            # Domain dedupe
+            if new_domain and new_domain not in GENERIC_DOMAINS:
+                row_domain = ""
+                row_email = row.get('email')
+                if row_email and '@' in row_email:
+                    row_domain = row_email.split('@')[-1].lower()
+                elif row.get('website'):
+                    row_domain = _get_domain(row.get('website'))
+                    
+                if row_domain == new_domain:
+                    return jsonify({'error': f'A contact from the company domain {new_domain} already exists in this project'}), 409
 
         # Build enrichment_data
         enrichment = {}

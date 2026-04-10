@@ -29,19 +29,34 @@ def _decode_header_value(raw):
     except: return str(raw)
 
 def _extract_plain_text_snippet(full_msg) -> str:
-    """Extract up to 2000 characters of plain text from the email."""
+    """Extract up to 2000 characters of text from the email, including HTML fallbacks."""
+    import re
     body = ""
+    
+    def strip_html(html_str):
+        # Basic HTML tag remover to expose raw text like email addresses
+        return re.sub(r'<[^>]+>', ' ', html_str)
+
     if full_msg.is_multipart():
         for part in full_msg.walk():
             ctype = part.get_content_type()
             if ctype == "text/plain":
                 p = part.get_payload(decode=True)
                 if p: body += p.decode(errors='ignore') + "\n"
+            elif ctype == "text/html":
+                p = part.get_payload(decode=True)
+                if p: body += strip_html(p.decode(errors='ignore')) + "\n"
             elif ctype in ["message/delivery-status", "message/rfc822"]:
                 body += str(part) + "\n"
     else:
         p = full_msg.get_payload(decode=True)
-        if p: body = p.decode(errors='ignore')
+        if p:
+            content = p.decode(errors='ignore')
+            if full_msg.get_content_type() == "text/html":
+                body = strip_html(content)
+            else:
+                body = content
+                
     return body.strip()[:2000]
 
 def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
