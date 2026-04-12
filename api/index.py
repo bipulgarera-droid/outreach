@@ -1946,9 +1946,21 @@ def create_sequences():
                         'linkedin_company': enrichment_data.get('linkedin_company', ''),
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
                         'linkedin_about': enrichment_data.get('linkedin_about', ''),
-                        'review_count': enrichment_data.get('review_count', enrichment_data.get('reviews_count', '')),
-                        'reviewcount': enrichment_data.get('review_count', enrichment_data.get('reviews_count', '')),
-                        'rating': enrichment_data.get('rating', ''),
+                    rc = enrichment_data.get('review_count')
+                    if rc is None:
+                        rc = enrichment_data.get('reviews_count')
+                    if rc is None or rc == '':
+                        rc = 0
+                        
+                    rt = enrichment_data.get('rating')
+                    if rt is None or rt == '':
+                        rt = 0
+
+                    variables.update({
+                        'review_count': str(rc),
+                        'reviewcount': str(rc),
+                        'rating': str(rt),
+                    })
                     }
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
