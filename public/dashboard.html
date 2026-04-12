@@ -1538,6 +1538,7 @@
                                 ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium text-fuchsia-400">Company Info</th>'}
                                 ${isReplied ? '' : `<th class="px-4 py-3 text-left font-medium text-cyan-400 group/th">Website <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-cyan-700 opacity-0 group-hover/th:opacity-100 hover:text-cyan-300 cursor-pointer transition-opacity" onclick="showBulkEditModal('website', 'Website')"></i></th>`}
                                 ${isReplied ? '' : `<th class="px-4 py-3 text-left font-medium group/th">Phone <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('phone', 'Phone')"></i></th>`}
+                                ${isReplied ? '' : `<th class="px-4 py-3 text-left font-medium group/th">Reviews <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('review_count', 'Review Count')"></i></th>`}
                                 <th class="px-4 py-3 text-left font-medium group/th">Email <i data-lucide="edit-3" class="w-3 h-3 inline ml-1 text-gray-600 opacity-0 group-hover/th:opacity-100 hover:text-white cursor-pointer transition-opacity" onclick="showBulkEditModal('email', 'Email')"></i></th>
                                 ${isReplied ? `
                                 <th class="px-4 py-3 text-left font-medium text-violet-400">Sender Email</th>
@@ -1588,6 +1589,14 @@
                     })()}
                                     </td>
                                     <td class="px-4 py-3 text-gray-400 text-xs">${c.phone || '—'}</td>
+                                    <td class="px-4 py-3 text-gray-400 text-xs whitespace-nowrap font-mono">${(() => {
+                                        try {
+                                            const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                                            if (ed.rating && ed.review_count !== undefined) return `<span class="text-amber-400">${ed.rating}★</span> <span class="opacity-50 ml-1">(${ed.review_count})</span>`;
+                                            if (ed.review_count !== undefined) return `<span class="opacity-50">(${ed.review_count})</span>`;
+                                            return '—';
+                                        } catch(e) { return '—'; }
+                                    })()}</td>
                                     `}
                                     <td class="px-4 py-3 text-gray-300">
                                         <div class="flex items-center gap-1.5">
