@@ -1336,7 +1336,7 @@ def generate_template():
             
         system = """You are an expert cold email copywriter. Write a single cold email sequence step.
         Return ONLY valid JSON with 'subject' and 'body' keys.
-        Variables you may use: {{first_name}}, {{name}}, {{company}}, {{sender_name}}, {{sender_first_name}}.
+        Variables you may use: {{first_name}}, {{name}}, {{company}}, {{sender_name}}, {{sender_first_name}}, {{review_count}}, {{rating}}.
         Do NOT use {{icebreaker}} - it is not used.
         Keep the email SHORT (3-5 sentences), concise, and natural. Goal: get a REPLY.
         ALWAYS end the email body with a sign-off using {{sender_name}} or {{sender_first_name}}.
@@ -1489,6 +1489,8 @@ VARIABLES — these are substituted per-contact at send time. Use them as {{vari
 - {{first_name}} — contact's greeting name (e.g. "Jasmine Spa"). USE THIS in the greeting.
 - {{name}} — contact's full display name (e.g. "Jasmine Spa Team"). USE THIS when referencing the business in the body.
 - {{company}} — company name. Use sparingly if {{name}} already used.
+- {{review_count}} — number of reviews the company has (from GrowthScout).
+- {{rating}} — Google rating of the company (from GrowthScout).
 - {{sender_name}} — the sender's full name (usually for sign-off).
 Do NOT use {{icebreaker}}.
 
@@ -1936,6 +1938,8 @@ def create_sequences():
                         'linkedin_company': enrichment_data.get('linkedin_company', ''),
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
                         'linkedin_about': enrichment_data.get('linkedin_about', ''),
+                        'review_count': enrichment_data.get('review_count', enrichment_data.get('reviews_count', '')),
+                        'rating': enrichment_data.get('rating', ''),
                     }
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
@@ -2557,6 +2561,12 @@ def import_leads():
                 enrichment['website'] = lead['website']
             if lead.get('phone'):
                 enrichment['phone'] = lead['phone']
+            if lead.get('review_count') is not None:
+                enrichment['review_count'] = lead['review_count']
+            if lead.get('reviews_count') is not None:
+                enrichment['review_count'] = lead['reviews_count']
+            if lead.get('rating') is not None:
+                enrichment['rating'] = lead['rating']
             if lead.get('pagespeed_mobile') is not None:
                 enrichment['pagespeed_mobile'] = lead['pagespeed_mobile']
             if lead.get('pagespeed_desktop') is not None:
