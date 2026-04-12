@@ -1946,6 +1946,8 @@ def create_sequences():
                         'linkedin_company': enrichment_data.get('linkedin_company', ''),
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
                         'linkedin_about': enrichment_data.get('linkedin_about', ''),
+                    }
+
                     rc = enrichment_data.get('review_count')
                     if rc is None:
                         rc = enrichment_data.get('reviews_count')
@@ -1961,7 +1963,6 @@ def create_sequences():
                         'reviewcount': str(rc),
                         'rating': str(rt),
                     })
-                    }
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
