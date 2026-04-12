@@ -1939,6 +1939,7 @@ def create_sequences():
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
                         'linkedin_about': enrichment_data.get('linkedin_about', ''),
                         'review_count': enrichment_data.get('review_count', enrichment_data.get('reviews_count', '')),
+                        'reviewcount': enrichment_data.get('review_count', enrichment_data.get('reviews_count', '')),
                         'rating': enrichment_data.get('rating', ''),
                     }
 
