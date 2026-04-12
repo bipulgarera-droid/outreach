@@ -1719,7 +1719,12 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
         elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
 
         import json as _json
-        result = _json.loads(content)
+        try:
+            result = _json.loads(content, strict=False)
+        except _json.JSONDecodeError:
+            # Fallback for severe JSON breakage (e.g., unterminated strings)
+            import ast
+            result = ast.literal_eval(content)
         if isinstance(result, list) and len(result) == len(bodies):
             return [str(r) for r in result]
         logger.warning(f"Batch paraphrase returned wrong count ({len(result)} vs {len(bodies)}), using originals")
