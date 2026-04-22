@@ -104,6 +104,16 @@ def cleanup_generic_names(project_id=None):
         # Priority: enrichment_data['website'] -> enrichment_data['url'] -> c['website'] -> c['source_url']
         website = ed.get('website') or ed.get('url') or c.get('website') or c.get('source_url')
         
+        # Strip pipe-separated SEO junk from existing company names (Google Maps titles)
+        current_company = c.get('company') or ''
+        if '|' in current_company:
+            stripped = current_company.split('|')[0].strip()
+            if stripped and stripped != current_company:
+                logger.info(f"Stripping pipe junk from company: '{current_company}' -> '{stripped}'")
+                supabase.table('contacts').update({'company': stripped}).eq('id', c['id']).execute()
+                stats['fixed'] += 1
+                continue
+        
         if website:
             clean_brand = _extract_brand_from_url(website)
             if clean_brand and len(clean_brand) > 2:

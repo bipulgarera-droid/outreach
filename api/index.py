@@ -1782,6 +1782,18 @@ def create_sequences():
                 if not name: return ""
                 name = name.strip()
                 
+                # 0. Strip pipe/comma-separated SEO junk from Google Maps titles
+                # e.g. "Capital Signs | Custom DTF Transfers | UV DTF | ..." → "Capital Signs"
+                # e.g. "Sir Speedy Print, Signs, Marketing" → "Sir Speedy Print"
+                for sep_char in ['|', ',']:
+                    if sep_char in name:
+                        name = name.split(sep_char)[0].strip()
+                # Also handle en-dash / em-dash separated SEO titles
+                for sep in [' – ', ' — ']:
+                    if sep in name:
+                        name = name.split(sep)[0].strip()
+                        break
+                
                 # 1. CamelCase split
                 name = _re.sub(r'([a-z])([A-Z])', r'\1 \2', name)
                 
@@ -1838,10 +1850,17 @@ def create_sequences():
                 return ' '.join(parts).strip(' -|–—.,;:"\' ')
 
             def _shorten_company(name):
+                # Safety net: strip pipe/comma junk before cleaning
+                if name:
+                    for sep_char in ['|', ',']:
+                        if sep_char in name:
+                            name = name.split(sep_char)[0].strip()
                 name = _clean_biz_name(name)
                 if not name: return name
                 words = name.split()
-                return ' '.join(words[:3]) if len(words) > 4 else name
+                result = ' '.join(words[:3]) if len(words) > 4 else name
+                # Strip trailing punctuation that can leak after truncation
+                return result.rstrip(' ,|;:-–—.')
 
             def _is_personal_email(email, full_name):
                 if not email or not full_name: return False
@@ -1902,6 +1921,14 @@ def create_sequences():
                     
                     raw_company = contact.get('company') or enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name') or 'your company'
                     
+                    # Strip pipe/comma-separated SEO junk from Google Maps titles
+                    raw_company = str(raw_company)
+                    for sep_char in ['|', ',']:
+                        if sep_char in raw_company:
+                            raw_company = raw_company.split(sep_char)[0].strip()
+                    # Strip any trailing punctuation
+                    raw_company = raw_company.rstrip(' ,|;:-–—.')
+                    
                     # Fix for "Unknown" companies to smartly pull from domain fallback
                     if str(raw_company).lower().strip() in ['unknown', 'unknown company', 'unknown business', '', '-', 'n/a', 'none']:
                         if contact_email and '@' in contact_email:
@@ -1915,6 +1942,19 @@ def create_sequences():
                                 raw_company = 'your company'
                         else:
                             raw_company = 'your company'
+                    
+                    # Company-email domain mismatch detection
+                    # If the email domain clearly doesn't match the company name, 
+                    # use the email domain as company instead (prevents e.g. company="Capital Signs" with email=speede@speedetransfers.com)
+                    if contact_email and '@' in contact_email:
+                        email_domain = contact_email.split('@')[-1].lower()
+                        if email_domain not in ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'me.com', 'msn.com', 'live.com']:
+                            domain_brand = email_domain.split('.')[0].lower()
+                            company_lower = raw_company.lower().replace(' ', '')
+                            # If the email domain's core word doesn't appear anywhere in the company name, they mismatch
+                            if len(domain_brand) >= 3 and domain_brand not in company_lower:
+                                logger.info(f"  Company-email mismatch: company='{raw_company}' vs domain='{email_domain}'. Using domain as company.")
+                                raw_company = domain_brand.title()
 
                     full_name = contact.get('name', 'there')
                     is_personal = _is_personal_email(contact_email, full_name)
