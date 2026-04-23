@@ -1685,55 +1685,62 @@ For EACH email:
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
 
-        if company_context or company_info:
-            system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
-Since we have detailed company intelligence, for EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
+        c_niche = str(context.get('niche', 'business') if context else 'business').strip()
+        c_loc = str(context.get('location', 'their area') if context else 'their area').strip()
+
+        system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
+For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
 """
-            if company_context:
-                system += f"""
+        if company_context:
+            system += f"""
 COMPANY SCRAPED CONTEXT: 
 - Mission: {company_context.get('mission_and_about','')}
 - Offerings: {company_context.get('offerings_and_positioning','')}
 - Process: {company_context.get('process_and_differentiation','')}
 - Proof: {company_context.get('proof_of_success','')}
 """
-            elif company_info:
-                system += f"""
+        elif company_info:
+            system += f"""
 COMPANY SCRAPED CONTEXT (RAW WEBSITE TEXT):
 {company_info[:3000]}
 """
+        else:
+            system += f"""
+COMPANY SCRAPED CONTEXT: None available.
+Because no context is available, you MUST write a fallback observation based purely on their niche ({c_niche}) and location ({c_loc}).
+"""
 
-            system += """
+        system += """
 EMAIL_1 RULES:
-Use the provided context to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
+Use the provided context (or fallback) to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
 """
-            if company_info and not company_context:
-                c_niche = context.get('niche', 'business') if context else 'business'
-                c_loc = context.get('location', 'their area') if context else 'their area'
-                system += f"""IMPORTANT RAW TEXT GUIDANCE:
-Read through the raw website text. Find ONE specific, undeniable detail about what they do or sell (e.g., "$500 gutter guard installations," "veteran-owned since 2004," "specializing in Invisalign"). 
-Do NOT hallucinate. Do NOT invent services. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their niche ({c_niche}) and location ({c_loc}).
-Example fallback: "Love the {c_niche} work you are doing in {c_loc}."
+        if company_info and not company_context:
+            system += f"""IMPORTANT RAW TEXT GUIDANCE:
+Read through the raw website text. Find ONE specific, undeniable detail about what they do or sell. 
+Do NOT hallucinate. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their niche ({c_niche}) and location ({c_loc}).
+Example fallback: "Love the {c_niche} work you are doing in {c_loc}." (Keep this entirely on one single line, NO newlines inside the sentence).
 """
-            if personalization_prompt:
-                system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
+        
+        if personalization_prompt:
+            system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
 Focus the observation SPECIFICALLY on: "{personalization_prompt}". 
 If details matching "{personalization_prompt}" are explicitly present in the COMPANY SCRAPED CONTEXT above, you MUST use them.
-If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context that anchors the offer.
+If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context.
 """
-            else:
-                system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Just find a cool feature, detail, or offering on their site and compliment it casually.
+        else:
+            system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Just find a cool feature, detail, or offering on their site and compliment it casually.
 """
-            system += """
-1. The Compliment (Line 1): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Example: "Hey Cali, love how L2 makes it easy to filter by acreage." Keep it conversational and brief. NEVER use phrases like "I noticed", "I saw", or "I was looking at".
-2. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
-3. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
-4. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
+        system += """
+1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
+2. The Compliment (Line 2): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Never use phrases like "I noticed" or "I saw".
+3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
+4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
+5. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
         system += f"""\n\nReturn ONLY a JSON array of exactly {len(bodies)} strings, in the same order:
-["rewritten EMAIL_1 body", "rewritten EMAIL_2 body", ...]
+["rewritten body 1", "rewritten body 2", ...]
 
 Return ONLY the raw JSON array. No markdown, no explanation."""
 
@@ -1990,8 +1997,8 @@ def create_sequences():
                     if not company_info and 'audit_data' in enrichment_data:
                         company_info = enrichment_data['audit_data'].get('website_content')
                     
-                    # Auto-generate icebreaker on the fly if missing but company_info is present
-                    if not raw_icebreaker and company_info:
+                    # Auto-generate icebreaker on the fly if missing
+                    if not raw_icebreaker:
                         from execution.generate_icebreakers import generate_icebreaker
                         logger.info(f"  Auto-generating missing icebreaker for {contact.get('id')} using company_info...")
                         generated = generate_icebreaker(
