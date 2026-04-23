@@ -106,8 +106,12 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     # Use company field for search if available (avoids "Jasmine - Team" style noise)
     search_name = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or name
     
-    # Step 1: Scrape the business website for real context
-    web_content = _fetch_website_context(search_name, location=location, website=website)
+    # Step 1: Check if GrowthScout pushed the raw pre-scraped markdown
+    web_content = enrichment_data.get('company_info', '')
+    
+    # Fallback: Scrape the business website for real context if we didn't receive company_info
+    if not web_content:
+        web_content = _fetch_website_context(search_name, location=location, website=website)
     
     context = f"Business Name: {name}"
     if location:
@@ -139,13 +143,14 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     if web_content:
         context += f"\n\nSCRAPED WEBSITE CONTENT:\n{web_content}"
     
-    prompt = f"""Generate a 1-2 sentence personalized icebreaker for cold emailing this business.
+    prompt = f"""Generate a 1 sentence personalized icebreaker for cold emailing this business.
 
 CRITICAL RULES (non-negotiable):
-1. ALWAYS produce exactly 1-2 warm, genuine sentences. NEVER refuse. NEVER ask questions. NEVER say you lack information.
-2. If website content is provided, reference something SPECIFIC from it — a service, a product, a value, a philosophy.
-3. If NO website content is provided, write a warm professional opener based on the business name — keep it genuine.
-4. Do NOT mention the sender's service, product, or reason for reaching out. 100% about THEM.
+1. ALWAYS produce exactly 1 warm, genuine sentence. NEVER refuse. NEVER ask questions. NEVER say you lack information.
+2. If website content is provided, read through the markdown and find specific, undeniable details about what they do or sell (e.g., "$500 gutter guard installations", "veteran-owned since 2004", "specializing in Invisalign"). Do NOT invent services or hallucinate.
+3. If NO website content is provided (or if it is too generic to pull anything useful), fallback to a standard generic icebreaker based purely on their category/niche.
+4. Keep the icebreaker to ONE sentence. Example: "Saw on your site that you specialize in Invisalign and cosmetic enhancements for the Austin area."
+5. Do NOT mention the sender's service, product, or reason for reaching out. 100% about THEM.
 5. Do NOT include ANY citations, footnotes, or numbers in brackets like [1] or [2].
 6. Do NOT add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
 7. Do NOT mention any city or location unless explicitly in the data below.
@@ -154,7 +159,7 @@ CRITICAL RULES (non-negotiable):
 
 {context}
 
-Reply with ONLY the icebreaker (1-2 sentences). No intro, no explanation, no questions."""
+Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questions."""
 
     try:
         from google import genai
@@ -163,9 +168,9 @@ Reply with ONLY the icebreaker (1-2 sentences). No intro, no explanation, no que
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         system_instruction = (
-            'You are an elite cold-email publicist. Your ONLY job is to output 1-2 warm icebreaker sentences. '
+            'You are an elite cold-email publicist. Your ONLY job is to output 1 warm icebreaker sentence. '
             'You NEVER refuse, NEVER ask questions, and NEVER say you lack information. '
-            'If you have website content, reference something specific. If you have nothing, write a warm professional opener based on the business name. '
+            'Find specific undeniable details from the content to use. If content is empty or totally generic, write a standard professional opener based on their niche. '
             'Never hallucinate unverified facts, but always produce warm copy.'
         )
         

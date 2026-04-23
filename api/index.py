@@ -624,6 +624,8 @@ def add_contact_manual():
             enrichment['location'] = data['location']
         if data.get('niche'):
             enrichment['niche'] = data['niche']
+        if data.get('company_info'):
+            enrichment['company_info'] = data['company_info']
         enrichment['source_app'] = 'manual'
 
         contact = {
@@ -1636,7 +1638,7 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, personalization_prompt: str = None) -> list:
+def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None) -> list:
     """Paraphrase multiple email bodies in ONE Gemini Flash call.
     Returns a list of paraphrased strings in the same order as input.
     If anything fails, returns originals as fallback."""
@@ -1670,15 +1672,25 @@ For EACH email:
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
 
-        if company_context:
+        if company_context or company_info:
             system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
-Since we have detailed company intelligence, for EMAIL_1 ONLY, you MUST follow this strict 4-line framework perfectly:
+Since we have detailed company intelligence, for EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
+"""
+            if company_context:
+                system += f"""
 COMPANY SCRAPED CONTEXT: 
 - Mission: {company_context.get('mission_and_about','')}
 - Offerings: {company_context.get('offerings_and_positioning','')}
 - Process: {company_context.get('process_and_differentiation','')}
 - Proof: {company_context.get('proof_of_success','')}
+"""
+            elif company_info:
+                system += f"""
+COMPANY SCRAPED CONTEXT (RAW WEBSITE TEXT):
+{company_info[:3000]}
+"""
 
+            system += """
 EMAIL_1 RULES:
 Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
 """
@@ -1971,6 +1983,21 @@ def create_sequences():
                         display_name = (clean_biz + " Team") if clean_biz != full_name else "Team"
 
                     raw_icebreaker = contact.get('icebreaker', '') or ''
+                    
+                    # Auto-generate icebreaker on the fly if missing but company_info is present
+                    if not raw_icebreaker and enrichment_data.get('company_info'):
+                        from execution.generate_icebreakers import generate_icebreaker
+                        logger.info(f"  Auto-generating missing icebreaker for {contact.get('id')} using company_info...")
+                        generated = generate_icebreaker(
+                            name=display_name,
+                            bio=contact.get('bio', ''),
+                            linkedin_url=contact.get('linkedin_url', ''),
+                            enrichment_data=enrichment_data
+                        )
+                        if generated:
+                            raw_icebreaker = generated
+                            _sb.table('contacts').update({'icebreaker': generated}).eq('id', contact['id']).execute()
+
                     clean_icebreaker = _re.sub(r'\[\d+\]', '', raw_icebreaker).strip()
 
                     variables = {
@@ -2008,7 +2035,13 @@ def create_sequences():
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
-                    bodies_para = paraphrase_texts_batch(bodies_raw, context=variables, company_context=company_context, personalization_prompt=custom_prompt)
+                    bodies_para = paraphrase_texts_batch(
+                        bodies_raw, 
+                        context=variables, 
+                        company_context=company_context, 
+                        company_info=enrichment_data.get('company_info'),
+                        personalization_prompt=custom_prompt
+                    )
 
                     # ── SMART REFRESH / DEDUP CHECK ──
                     # Instead of a simple "already exists = skip", we're smarter:
