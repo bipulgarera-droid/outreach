@@ -1685,8 +1685,8 @@ For EACH email:
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
 
-        c_niche = str(context.get('niche', 'business') if context else 'business').strip()
-        c_loc = str(context.get('location', 'their area') if context else 'their area').strip()
+        c_niche = str(context.get('niche', 'business') if context else 'business').replace('\n', ' ').replace('\r', '').strip()
+        c_loc = str(context.get('location', 'their area') if context else 'their area').replace('\n', ' ').replace('\r', '').strip()
 
         system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
 For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:

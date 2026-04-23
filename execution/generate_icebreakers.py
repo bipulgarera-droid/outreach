@@ -151,8 +151,8 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     # If we have no scraped context, give Gemini a clear fallback instruction
     no_context_instruction = ''
     if not web_content:
-        niche = enrichment_data.get('niche', 'business')
-        fallback_loc = location or 'their area'
+        niche = str(enrichment_data.get('niche', 'business')).replace('\n', ' ').replace('\r', '').strip()
+        fallback_loc = str(location or 'their area').replace('\n', ' ').replace('\r', '').strip()
         no_context_instruction = f"""\nIMPORTANT: No website content was found. You MUST still write a icebreaker.
     Write a warm, professional 1-2 sentence opener based ONLY on the business name, their niche ({niche}), and their location ({fallback_loc}).
     Example: "The dedication it takes to build a standout {niche} brand in {fallback_loc} like {{name}} is impressive — your team clearly cares about the client experience."
