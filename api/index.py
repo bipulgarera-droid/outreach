@@ -1741,15 +1741,7 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                safety_settings=[
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                ]
-            )
+            config=types.GenerateContentConfig(temperature=0.2)
         )
         # Strip markdown emphasis symbols at the code level so they physically cannot survive
         content = response.text.strip().replace('*', '').replace('_', '')
