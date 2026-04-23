@@ -200,7 +200,7 @@ Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questi
         )
         
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=config
         )
