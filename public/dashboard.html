@@ -1568,10 +1568,13 @@
                                         ${(() => {
                                             try {
                                                 const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                                                const compString = encodeURIComponent(c.company || '').replace(/'/g, "%27");
                                                 if (ed.company_context) {
                                                     const ctxString = encodeURIComponent(JSON.stringify(ed.company_context)).replace(/'/g, "%27");
-                                                    const compString = encodeURIComponent(c.company || '').replace(/'/g, "%27");
-                                                    return `<button onclick="showCompanyContextModal('${compString}', '${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">View</button>`;
+                                                    return `<button onclick="showCompanyContextModal('${compString}', '${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">4-Pillar JSON</button>`;
+                                                } else if (ed.company_info) {
+                                                    const infoString = encodeURIComponent(ed.company_info).replace(/'/g, "%27");
+                                                    return `<button onclick="showCompanyInfoModal('${compString}', '${infoString}')" class="text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 font-medium whitespace-nowrap">View Raw Data</button>`;
                                                 }
                                                 return '<span class="text-gray-600 text-xs">—</span>';
                                             } catch(e) { return '<span class="text-gray-600 text-xs">—</span>'; }
@@ -3843,6 +3846,38 @@
                 if (window.lucide) lucide.createIcons();
             } catch (e) {
                 showToast('❌ Error loading context: ' + e.message);
+            }
+        }
+
+        function showCompanyInfoModal(companyNameEnc, infoStringEnc) {
+            try {
+                const info = decodeURIComponent(infoStringEnc);
+                const companyName = decodeURIComponent(companyNameEnc);
+                document.getElementById('modalContent').innerHTML = `
+                    <div class="p-5 border-b border-gray-800 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                            <i data-lucide="file-text" class="w-5 h-5 text-cyan-400"></i>
+                            ${companyName || 'Raw Data'}
+                        </h2>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-white transition-colors">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-5 space-y-4 text-sm text-gray-300">
+                        <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700 max-h-[60vh] overflow-y-auto">
+                            <h3 class="text-cyan-400 font-medium mb-2 uppercase text-xs tracking-wider">Raw Website Markdown</h3>
+                            <p class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-400">${info}</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-900 border-t border-gray-800 flex justify-end gap-2">
+                        <button onclick="closeModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium text-sm">Close</button>
+                    </div>
+                `;
+                document.getElementById('modalOverlay').classList.remove('hidden');
+                document.getElementById('modalOverlay').classList.add('flex');
+                if (window.lucide) lucide.createIcons();
+            } catch (e) {
+                showToast('❌ Error loading company info: ' + e.message);
             }
         }
 
