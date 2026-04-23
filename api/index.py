@@ -1914,6 +1914,9 @@ def create_sequences():
                     from supabase import create_client as _create_client
                     _sb = _create_client(SUPABASE_URL, effective_key)
                     base_date = datetime.utcnow()
+                    
+                    import time
+                    time.sleep(4) # Respect Gemini Free Tier 15 RPM limit
 
                     enrichment_data = contact.get('enrichment_data') or {}
                     if isinstance(enrichment_data, str):
@@ -2126,8 +2129,8 @@ def create_sequences():
 
                 return created, errors
 
-            # ── PARALLEL: process up to 10 contacts concurrently ──
-            with ThreadPoolExecutor(max_workers=5) as pool:
+            # ── STRICT SEQUENTIAL: Respect Gemini 15 RPM Free Tier  ──
+            with ThreadPoolExecutor(max_workers=1) as pool:
                 futures = {pool.submit(process_contact, c): c for c in contacts_data}
                 for fut in as_completed(futures):
                     try:
