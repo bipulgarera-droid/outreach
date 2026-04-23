@@ -1569,12 +1569,14 @@
                                             try {
                                                 const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
                                                 const compString = encodeURIComponent(c.company || '').replace(/'/g, "%27");
+                                                
                                                 if (ed.company_context) {
                                                     const ctxString = encodeURIComponent(JSON.stringify(ed.company_context)).replace(/'/g, "%27");
                                                     return `<button onclick="showCompanyContextModal('${compString}', '${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">4-Pillar JSON</button>`;
                                                 } else if (ed.company_info) {
-                                                    const infoString = encodeURIComponent(ed.company_info).replace(/'/g, "%27");
-                                                    return `<button onclick="showCompanyInfoModal('${compString}', '${infoString}')" class="text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 font-medium whitespace-nowrap">View Raw Data</button>`;
+                                                    window.__infoStore = window.__infoStore || {};
+                                                    window.__infoStore[c.id] = ed.company_info;
+                                                    return `<button onclick="showCompanyInfoModal('${compString}', '${c.id}')" class="text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 font-medium whitespace-nowrap">View Raw Data</button>`;
                                                 }
                                                 return '<span class="text-gray-600 text-xs">—</span>';
                                             } catch(e) { return '<span class="text-gray-600 text-xs">—</span>'; }
@@ -3849,9 +3851,9 @@
             }
         }
 
-        function showCompanyInfoModal(companyNameEnc, infoStringEnc) {
+        function showCompanyInfoModal(companyNameEnc, contactId) {
             try {
-                const info = decodeURIComponent(infoStringEnc);
+                const info = window.__infoStore ? window.__infoStore[contactId] : 'Error: Data not found in cache';
                 const companyName = decodeURIComponent(companyNameEnc);
                 document.getElementById('modalContent').innerHTML = `
                     <div class="p-5 border-b border-gray-800 flex items-center justify-between">
