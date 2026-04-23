@@ -624,8 +624,13 @@ def add_contact_manual():
             enrichment['location'] = data['location']
         if data.get('niche'):
             enrichment['niche'] = data['niche']
-        if data.get('company_info'):
-            enrichment['company_info'] = data['company_info']
+        company_info = data.get('company_info')
+        if not company_info and 'enrichment_data' in data:
+            company_info = data['enrichment_data'].get('company_info')
+            if not company_info and 'audit_data' in data['enrichment_data']:
+                company_info = data['enrichment_data']['audit_data'].get('website_content')
+        if company_info:
+            enrichment['company_info'] = company_info
         enrichment['source_app'] = 'manual'
 
         contact = {
@@ -1692,7 +1697,12 @@ COMPANY SCRAPED CONTEXT (RAW WEBSITE TEXT):
 
             system += """
 EMAIL_1 RULES:
-Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
+Use the provided context to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
+"""
+            if company_info and not company_context:
+                system += """IMPORTANT RAW TEXT GUIDANCE:
+Read through the raw website text. Find ONE specific, undeniable detail about what they do or sell (e.g., "$500 gutter guard installations," "veteran-owned since 2004," "specializing in Invisalign"). 
+Do NOT hallucinate. Do NOT invent services. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their category/niche.
 """
             if personalization_prompt:
                 system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
