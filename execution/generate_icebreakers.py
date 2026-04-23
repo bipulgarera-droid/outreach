@@ -113,6 +113,14 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     
     # Truncate to save tokens, first 5000 chars is usually more than enough
     if web_content:
+        import re
+        # Remove massive blocks of empty space
+        web_content = re.sub(r'\n{3,}', '\n\n', web_content)
+        # Remove aggressive marketing words that trip Google's filter
+        bad_words = ["kill", "crush", "dominate", "destroy", "weapon", "war", "battle", "xxx", "adult"]
+        for word in bad_words:
+            web_content = re.sub(rf'\b{word}\b', '[removed]', web_content, flags=re.IGNORECASE)
+            
         web_content = web_content[:5000]
         logger.info("[\033[92mSUCCESS\033[0m] Found raw Markdown payload inside frontend enrichment_data object. Skipping live scrape.")
     
@@ -189,24 +197,6 @@ Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questi
             temperature=0.3,  # Low temp = less hallucination
             max_output_tokens=350,
             system_instruction=system_instruction,
-            safety_settings=[
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                ),
-            ]
         )
         
         response = client.models.generate_content(

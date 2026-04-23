@@ -1650,6 +1650,14 @@ def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: 
     if not GEMINI_API_KEY or not bodies:
         return bodies
     try:
+        if company_info:
+            import re
+            company_info = str(company_info)
+            company_info = re.sub(r'\n{3,}', '\n\n', company_info)
+            bad_words = ["kill", "crush", "dominate", "destroy", "weapon", "war", "battle", "xxx", "adult"]
+            for word in bad_words:
+                company_info = re.sub(rf'\b{word}\b', '[removed]', company_info, flags=re.IGNORECASE)
+
         contact_info = ""
         if context:
             contact_info = f"\nPROSPECT CONTEXT:\nBusiness: {context.get('name', '')}, Niche: {context.get('niche', '')}, Location: {context.get('location', '')}."
@@ -1733,15 +1741,7 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                safety_settings=[
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-                ]
-            )
+            config=types.GenerateContentConfig(temperature=0.2)
         )
         # Strip markdown emphasis symbols at the code level so they physically cannot survive
         content = response.text.strip().replace('*', '').replace('_', '')
