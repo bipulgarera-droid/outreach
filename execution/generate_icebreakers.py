@@ -192,19 +192,19 @@ Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questi
             safety_settings=[
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
                 ),
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
                 ),
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
                 ),
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
                 ),
             ]
         )

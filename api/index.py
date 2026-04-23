@@ -1736,10 +1736,10 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
             config=types.GenerateContentConfig(
                 temperature=0.2,
                 safety_settings=[
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
                 ]
             )
         )
@@ -1952,13 +1952,7 @@ def create_sequences():
                     
                     raw_company = contact.get('company') or enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name') or 'your company'
                     
-                    # Strip pipe/comma-separated SEO junk from Google Maps titles
-                    raw_company = str(raw_company)
-                    for sep_char in ['|', ',']:
-                        if sep_char in raw_company:
-                            raw_company = raw_company.split(sep_char)[0].strip()
-                    # Strip any trailing punctuation
-                    raw_company = raw_company.rstrip(' ,|;:-–—.')
+                    raw_company = _shorten_company(str(raw_company))
                     
                     # Fix for "Unknown" companies to smartly pull from domain fallback
                     if str(raw_company).lower().strip() in ['unknown', 'unknown company', 'unknown business', '', '-', 'n/a', 'none']:
@@ -1973,19 +1967,6 @@ def create_sequences():
                                 raw_company = 'your company'
                         else:
                             raw_company = 'your company'
-                    
-                    # Company-email domain mismatch detection
-                    # If the email domain clearly doesn't match the company name, 
-                    # use the email domain as company instead (prevents e.g. company="Capital Signs" with email=speede@speedetransfers.com)
-                    if contact_email and '@' in contact_email:
-                        email_domain = contact_email.split('@')[-1].lower()
-                        if email_domain not in ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'me.com', 'msn.com', 'live.com']:
-                            domain_brand = email_domain.split('.')[0].lower()
-                            company_lower = raw_company.lower().replace(' ', '')
-                            # If the email domain's core word doesn't appear anywhere in the company name, they mismatch
-                            if len(domain_brand) >= 3 and domain_brand not in company_lower:
-                                logger.info(f"  Company-email mismatch: company='{raw_company}' vs domain='{email_domain}'. Using domain as company.")
-                                raw_company = domain_brand.title()
 
                     full_name = contact.get('name', 'there')
                     is_personal = _is_personal_email(contact_email, full_name)
