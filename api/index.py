@@ -1994,8 +1994,13 @@ def create_sequences():
 
                     raw_icebreaker = contact.get('icebreaker', '') or ''
                     
+                    # Safely load the raw markdown payload regardless of schema
+                    company_info = enrichment_data.get('company_info')
+                    if not company_info and 'audit_data' in enrichment_data:
+                        company_info = enrichment_data['audit_data'].get('website_content')
+                    
                     # Auto-generate icebreaker on the fly if missing but company_info is present
-                    if not raw_icebreaker and enrichment_data.get('company_info'):
+                    if not raw_icebreaker and company_info:
                         from execution.generate_icebreakers import generate_icebreaker
                         logger.info(f"  Auto-generating missing icebreaker for {contact.get('id')} using company_info...")
                         generated = generate_icebreaker(
@@ -2049,7 +2054,7 @@ def create_sequences():
                         bodies_raw, 
                         context=variables, 
                         company_context=company_context, 
-                        company_info=enrichment_data.get('company_info'),
+                        company_info=company_info,
                         personalization_prompt=custom_prompt
                     )
 
