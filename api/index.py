@@ -1729,10 +1729,19 @@ For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 Return ONLY the raw JSON array. No markdown, no explanation."""
 
         client = genai.Client(api_key=GEMINI_API_KEY)
+        from google.genai import types
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
-            config={'temperature': 0.2},
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                safety_settings=[
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                ]
+            )
         )
         # Strip markdown emphasis symbols at the code level so they physically cannot survive
         content = response.text.strip().replace('*', '').replace('_', '')

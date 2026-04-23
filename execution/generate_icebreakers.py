@@ -78,7 +78,7 @@ def _fetch_website_context(name: str, location: str = None, website: str = None)
         return ''
 
 
-def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichment_data: dict = None) -> str | None:
+def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichment_data: dict = None):
     """
     Generate a personalized icebreaker using Gemini 2.5 Pro.
     First scrapes the business website via Serper + Jina to gather real context.
@@ -108,9 +108,17 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     
     # Step 1: Check if GrowthScout pushed the raw pre-scraped markdown
     web_content = enrichment_data.get('company_info', '')
+    if not web_content and 'audit_data' in enrichment_data:
+        web_content = enrichment_data['audit_data'].get('website_content', '')
+    
+    # Truncate to save tokens, first 5000 chars is usually more than enough
+    if web_content:
+        web_content = web_content[:5000]
+        logger.info("[\033[92mSUCCESS\033[0m] Found raw Markdown payload inside frontend enrichment_data object. Skipping live scrape.")
     
     # Fallback: Scrape the business website for real context if we didn't receive company_info
     if not web_content:
+        logger.warning("[\033[93mWARNING\033[0m] No 'company_info' markdown found in enrichment_data. Falling back to live API scrape.")
         web_content = _fetch_website_context(search_name, location=location, website=website)
     
     context = f"Business Name: {name}"
@@ -135,13 +143,15 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     # If we have no scraped context, give Gemini a clear fallback instruction
     no_context_instruction = ''
     if not web_content:
+        niche = enrichment_data.get('niche', 'business')
+        fallback_loc = location or 'their area'
         no_context_instruction = f"""\nIMPORTANT: No website content was found. You MUST still write a icebreaker.
-    Write a warm, professional 1-2 sentence opener based ONLY on the business name and type.
-    Example: "The dedication it takes to build a standout spa brand like {{name}} is impressive — your team clearly cares about the client experience."
+    Write a warm, professional 1-2 sentence opener based ONLY on the business name, their niche ({niche}), and their location ({fallback_loc}).
+    Example: "The dedication it takes to build a standout {niche} brand in {fallback_loc} like {{name}} is impressive — your team clearly cares about the client experience."
     Never ask for more info. Never say you lack information. Always produce a warm sentence."""
     
     if web_content:
-        context += f"\n\nSCRAPED WEBSITE CONTENT:\n{web_content}"
+        context += f"\n\nSCRAPED WEBSITE CONTENT (first 5000 chars):\n{web_content}"
     
     prompt = f"""Generate a 1 sentence personalized icebreaker for cold emailing this business.
 
@@ -179,6 +189,24 @@ Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questi
             temperature=0.3,  # Low temp = less hallucination
             max_output_tokens=350,
             system_instruction=system_instruction,
+            safety_settings=[
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+            ]
         )
         
         response = client.models.generate_content(
@@ -230,7 +258,7 @@ Reply with ONLY the icebreaker (1 sentence). No intro, no explanation, no questi
     return None
 
 
-def generate_icebreakers_batch(limit: int = 50, project_id: str | None = None, contact_ids: list | None = None, dry_run: bool = False) -> dict:
+def generate_icebreakers_batch(limit: int = 50, project_id: str = None, contact_ids: list = None, dry_run: bool = False) -> dict:
     """
     Generate icebreakers for enriched contacts in batch.
     
