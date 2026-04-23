@@ -1725,9 +1725,10 @@ If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMP
                 system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Just find a cool feature, detail, or offering on their site and compliment it casually.
 """
             system += """
-1. The Compliment (Line 1): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Example: "Hey Cali, love how L2 makes it easy to filter by acreage. Also a fan of your property update email option." Keep it conversational and brief. NEVER use phrases like "I noticed", "I saw", or "I was looking at".
-2. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you." or "Quick question for you."
-3. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
+1. The Compliment (Line 1): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Example: "Hey Cali, love how L2 makes it easy to filter by acreage." Keep it conversational and brief. NEVER use phrases like "I noticed", "I saw", or "I was looking at".
+2. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
+3. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
+4. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
