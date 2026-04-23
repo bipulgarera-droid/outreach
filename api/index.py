@@ -1700,9 +1700,12 @@ EMAIL_1 RULES:
 Use the provided context to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
 """
             if company_info and not company_context:
-                system += """IMPORTANT RAW TEXT GUIDANCE:
+                c_niche = context.get('niche', 'business') if context else 'business'
+                c_loc = context.get('location', 'their area') if context else 'their area'
+                system += f"""IMPORTANT RAW TEXT GUIDANCE:
 Read through the raw website text. Find ONE specific, undeniable detail about what they do or sell (e.g., "$500 gutter guard installations," "veteran-owned since 2004," "specializing in Invisalign"). 
-Do NOT hallucinate. Do NOT invent services. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their category/niche.
+Do NOT hallucinate. Do NOT invent services. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their niche ({c_niche}) and location ({c_loc}).
+Example fallback: "Love the {c_niche} work you are doing in {c_loc}."
 """
             if personalization_prompt:
                 system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
@@ -1711,15 +1714,12 @@ If details matching "{personalization_prompt}" are explicitly present in the COM
 If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context that anchors the offer.
 """
             else:
-                system += """IMPORTANT: Work BACKWARDS from the offer. First, identify the core problem that the original email's offer solves (e.g. "repetitive SEO fulfillment eating up time"). Then scan the 4 context points and pick the ONE that most strongly implies the prospect would face that exact problem. Ignore context points that are interesting but unrelated to the problem your offer solves.
+                system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Just find a cool feature, detail, or offering on their site and compliment it casually.
 """
             system += """
-1. The Observation: Confidently state the chosen context detail so they know you researched them. It MUST be a specific, concrete fact (e.g. "offers 12 marketing campaigns per year", "manages fulfillment for 200+ clients"). BAD EXAMPLES (DO NOT WRITE THESE): "helps operators free up time", "is all about giving people time back", "focuses on helping businesses grow". These are vague summaries, not observations. Do NOT reuse the original opening line. CRITICAL: NEVER use phrases like "I noticed", "I saw", "I was looking at", "Looks like", or "It seems". Just state the observation directly. The names mentioned in the scraped context are likely the founders/recipients, do NOT refer to them in the third person.
-2. The Bridge: Write exactly one sentence that connects their specific situation to the problem your offer solves. The reader should think "yeah, that IS my problem" before they even see the offer. DO NOT use em-dashes.
-3. The Offer & Proof: Naturally weave in the original core offer and proof statements. Do NOT change the core value proposition, numbers, or factual claims. IMPORTANT: If the original email mentions a specific client or case study name (e.g. "RankJacker"), keep that name in the output.
-4. The CTA: Keep the final Call to Action essentially identical to the original.
-5. The Sign-off: If the original email ends with a sign-off (e.g. "Best,\nBipul"), you MUST keep it exactly as-is.
-6. Keep the total output for EMAIL_1 strictly under 75-100 words. No fluff. No corporate speak.
+1. The Compliment (Line 1): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Example: "Hey Cali, love how L2 makes it easy to filter by acreage. Also a fan of your property update email option." Keep it conversational and brief. NEVER use phrases like "I noticed", "I saw", or "I was looking at".
+2. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you." or "Quick question for you."
+3. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
