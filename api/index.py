@@ -1747,7 +1747,7 @@ Return ONLY the raw JSON array. No markdown, no explanation."""
         client = genai.Client(api_key=GEMINI_API_KEY)
         from google.genai import types
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=system + "\n\nEmails to paraphrase:\n" + numbered_input,
             config=types.GenerateContentConfig(temperature=0.2)
         )
