@@ -1812,10 +1812,14 @@ def create_sequences():
         if not all_contacts_data:
             return jsonify({'error': 'No valid contacts found.'}), 400
             
+        # Get project data to use as fallback for generic niche/location
+        project_res = supabase.table('projects').select('niche, location').eq('id', project_id).execute()
+        project_data = project_res.data[0] if project_res.data else {}
+            
         import threading
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        def run_in_background(proj_id, contacts_data, templates_data, custom_prompt=None):
+        def run_in_background(proj_id, contacts_data, templates_data, custom_prompt=None, proj_data=None):
             import re as _re
             import json as _json
 
@@ -2023,8 +2027,8 @@ def create_sequences():
                         'company': _shorten_company(raw_company),
                         'sender_name': SENDER_NAME,
                         'sender_first_name': SENDER_NAME.split()[0] if SENDER_NAME else '',
-                        'location': enrichment_data.get('location') or enrichment_data.get('search_location') or contact.get('location') or '',
-                        'niche': enrichment_data.get('niche') or enrichment_data.get('category') or contact.get('niche') or contact.get('source') or '',
+                        'location': enrichment_data.get('location') or enrichment_data.get('search_location') or contact.get('location') or (proj_data.get('location') if proj_data else '') or '',
+                        'niche': enrichment_data.get('niche') or enrichment_data.get('category') or contact.get('niche') or contact.get('source') or (proj_data.get('niche') if proj_data else '') or '',
                         'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
                         'linkedin_company': enrichment_data.get('linkedin_company', ''),
                         'linkedin_title': enrichment_data.get('linkedin_title', ''),
@@ -2155,7 +2159,7 @@ def create_sequences():
 
         # Launch background thread (daemon=False so it outlives the request)
         logger.info(f"Background sequence creation started for {len(all_contacts_data)} contacts.")
-        thread = threading.Thread(target=run_in_background, args=(project_id, all_contacts_data, templates.data), daemon=False)
+        thread = threading.Thread(target=run_in_background, args=(project_id, all_contacts_data, templates.data, personalization_prompt, project_data), daemon=False)
         thread.start()
 
         return jsonify({
