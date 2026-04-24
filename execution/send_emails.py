@@ -123,8 +123,6 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
             
             if not to_email:
                 _log(f"No email for contact, skipping sequence {seq['id']}", level='warning')
-                if not dry_run:
-                    supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                 stats['skipped'] += 1
                 continue
             

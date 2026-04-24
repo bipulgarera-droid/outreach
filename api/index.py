@@ -1687,6 +1687,7 @@ For EACH email:
 
         c_niche = str(context.get('niche', 'business') if context else 'business').replace('\n', ' ').replace('\r', '').strip()
         c_loc = str(context.get('location', 'their area') if context else 'their area').replace('\n', ' ').replace('\r', '').strip()
+        c_name = str(context.get('company', '')) if context else ''
 
         system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
 For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
@@ -1708,6 +1709,7 @@ COMPANY SCRAPED CONTEXT (RAW WEBSITE TEXT):
             system += f"""
 COMPANY SCRAPED CONTEXT: None available.
 Because no context is available, you MUST write a fallback observation based purely on their niche ({c_niche}) and location ({c_loc}).
+If the niche and location are generic (like 'business' or 'their area'), you MUST use their company name ({c_name}) instead so it sounds natural. Example: "Love the work you are doing at {c_name}."
 """
 
         system += """
@@ -1717,7 +1719,7 @@ Use the provided context (or fallback) to craft a personalized 1-sentence openin
         if company_info and not company_context:
             system += f"""IMPORTANT RAW TEXT GUIDANCE:
 Read through the raw website text. Find ONE specific, undeniable detail about what they do or sell. 
-Do NOT hallucinate. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their niche ({c_niche}) and location ({c_loc}).
+Do NOT hallucinate. If the text is too generic to pull anything useful, fallback to a simple observation based purely on their niche ({c_niche}) and location ({c_loc}), or their company name ({c_name}).
 Example fallback: "Love the {c_niche} work you are doing in {c_loc}." (Keep this entirely on one single line, NO newlines inside the sentence).
 """
         
@@ -1732,7 +1734,7 @@ If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMP
 """
         system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
-2. The Compliment (Line 2): Start the email with a casual, hyper-specific compliment based on their website. It should sound like a human quickly checked out their site. Never use phrases like "I noticed" or "I saw".
+2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Example structures you SHOULD emulate to sound human: "Saw you offer [specific thing] - pretty cool stuff." OR "Saw your site and the focus on [specific thing] really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
 4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
 5. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.

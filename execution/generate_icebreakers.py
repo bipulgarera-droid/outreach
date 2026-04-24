@@ -153,10 +153,11 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
     if not web_content:
         niche = str(enrichment_data.get('niche', 'business')).replace('\n', ' ').replace('\r', '').strip()
         fallback_loc = str(location or 'their area').replace('\n', ' ').replace('\r', '').strip()
-        no_context_instruction = f"""\nIMPORTANT: No website content was found. You MUST still write a icebreaker.
-    Write a warm, professional 1-2 sentence opener based ONLY on the business name, their niche ({niche}), and their location ({fallback_loc}).
-    Example: "The dedication it takes to build a standout {niche} brand in {fallback_loc} like {{name}} is impressive — your team clearly cares about the client experience."
-    Never ask for more info. Never say you lack information. Always produce a warm sentence."""
+        c_name = str(name or 'your company').strip()
+        no_context_instruction = f"""\nIMPORTANT: No website content was found. You MUST still write an icebreaker.
+    Write a warm, casual 1 sentence opener using the business name ({c_name}).
+    Example you SHOULD emulate: "Love the work you guys are doing at {c_name}."
+    Never ask for more info. Never say you lack information. Always produce a casual, confident sentence."""
     
     if web_content:
         context += f"\n\nSCRAPED WEBSITE CONTENT (first 5000 chars):\n{web_content}"
@@ -166,8 +167,8 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
 CRITICAL RULES (non-negotiable):
 1. ALWAYS produce exactly 1 warm, genuine sentence. NEVER refuse. NEVER ask questions. NEVER say you lack information.
 2. If website content is provided, read through the markdown and find specific, undeniable details about what they do or sell (e.g., "$500 gutter guard installations", "veteran-owned since 2004", "specializing in Invisalign"). Do NOT invent services or hallucinate.
-3. If NO website content is provided (or if it is too generic to pull anything useful), fallback to a standard generic icebreaker based purely on their category/niche.
-4. Keep the icebreaker to ONE sentence. Example: "Saw on your site that you specialize in Invisalign and cosmetic enhancements for the Austin area."
+3. If NO website content is provided (or if it is too generic to pull anything useful), fallback to a friendly, generic observation using their company name.
+4. Keep the icebreaker to ONE casual sentence. Examples you SHOULD emulate to sound human: "Saw you offer [specific thing] - pretty cool stuff." OR "Saw your site and the focus on [specific thing] really stands out."
 5. Do NOT mention the sender's service, product, or reason for reaching out. 100% about THEM.
 5. Do NOT include ANY citations, footnotes, or numbers in brackets like [1] or [2].
 6. Do NOT add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
