@@ -1737,7 +1737,7 @@ If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMP
 2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City] - pretty cool stuff." OR "Saw you play [Hobby] at [Location] - love the dedication." OR "Saw your background in [Specific Field] before doing [Current Business] - really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
 4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
-5. The Rest of the Email: Keep the rest of the original template EXACTLY as provided (including the offer, CTA, and sign-off). Do not rewrite the core value proposition.
+5. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
