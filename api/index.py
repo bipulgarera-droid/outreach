@@ -1813,7 +1813,7 @@ def create_sequences():
             return jsonify({'error': 'No valid contacts found.'}), 400
             
         # Get project data to use as fallback for generic niche/location
-        project_res = supabase.table('projects').select('niche, location').eq('id', project_id).execute()
+        project_res = supabase.table('projects').select('niche').eq('id', project_id).execute()
         project_data = project_res.data[0] if project_res.data else {}
             
         import threading
