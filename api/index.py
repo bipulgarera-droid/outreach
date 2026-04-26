@@ -1718,8 +1718,8 @@ Use the provided context (or fallback) to craft a personalized 1-sentence openin
 """
         if company_info and not company_context:
             system += f"""IMPORTANT RAW TEXT GUIDANCE:
-Read through the raw website text. Find ONE highly specific, unique, or personal detail about them (such as a personal hobby, a hometown, a unique founding story, or a very specific achievement). Do NOT just grab the first generic service they sell or the city they serve. 
-Do NOT hallucinate. If the text is absolutely too generic to pull any personal or unique details, ONLY THEN fallback to a simple observation based on their niche ({c_niche}) and location ({c_loc}), or their company name ({c_name}).
+Read through the raw website text. Find ONE highly specific, unique, or personal detail (such as a personal hobby, a hometown, or a unique founding story) OR an impressive specific business offering (like specific featured properties, a unique niche service, or an impressive portfolio piece). Just don't be boring!
+Do NOT hallucinate. If the text is absolutely too generic to pull any personal details or specific featured offerings, ONLY THEN fallback to a simple observation based on their niche ({c_niche}) and location ({c_loc}), or their company name ({c_name}).
 Example fallback: "Love the {c_niche} work you are doing in {c_loc}." (Keep this entirely on one single line, NO newlines inside the sentence).
 """
         
@@ -1730,11 +1730,11 @@ If details matching "{personalization_prompt}" are explicitly present in the COM
 If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context.
 """
         else:
-            system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Look deep into their text to find a highly specific feature, a unique personal hobby/story, or an impressive detail, and compliment it casually. Do NOT just state their city or generic niche if they have rich personal details available.
+            system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Look deep into their text to find a highly personal detail (hobby/hometown) or an impressive specific business offering (like a featured property/service), and compliment it casually. Do NOT just state their city or generic niche if they have richer details available.
 """
         system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
-2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City] - pretty cool stuff." OR "Saw you play [Hobby] at [Location] - love the dedication." OR "Saw your background in [Specific Field] before doing [Current Business] - really stands out."
+2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City] - pretty cool stuff." OR "Saw your featured properties on [Site] - really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business] - really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
 4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
 5. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
