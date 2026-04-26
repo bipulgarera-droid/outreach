@@ -1683,6 +1683,8 @@ For EACH email:
 - CRITICAL: Preserve ALL template variables EXACTLY as written. Do NOT alter the spelling or format inside the braces.
 - Do NOT add new facts or claims not in the original
 - No citations, no footnotes, no bracketed numbers like [1]
+- **CRITICAL**: Do NOT include any website URLs or links (e.g., example.com) in the generated text, as this triggers spam filters.
+- **CRITICAL**: Do NOT use em dashes (—), en dashes (–), or hyphens (-) to connect clauses. Use commas or periods instead for natural conversational flow.
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
 
         c_niche = str(context.get('niche', 'business') if context else 'business').replace('\n', ' ').replace('\r', '').strip()
@@ -1734,7 +1736,7 @@ If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMP
 """
         system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
-2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City] - pretty cool stuff." OR "Saw your featured properties on [Site] - really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business] - really stands out."
+2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Do NOT include their website URL. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City], pretty cool stuff." OR "Saw your featured properties, really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business], really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
 4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
 5. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
