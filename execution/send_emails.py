@@ -144,44 +144,7 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
                 stats['skipped'] += 1
                 continue
             elif v_status == 'risky':
-                # Strict Mode: Only proceed if OSINT fallback verified them.
-                serper_passed = ed.get('serper_verified')
-                
-                # GrowthScout's scraping implies it already did Google searches to find the email
-                if ed.get('source_app') == 'growthscout':
-                    serper_passed = True
-                
-                # If OSINT never ran for this contact, do it inline right now
-                if serper_passed is None:
-                    _log(f"OSINT BOUNCE PROTECTION: {to_email} is RISKY but missing OSINT check. Running real-time verification now...")
-                    try:
-                        from execution.serper_fallback import verify_risky_contacts_bulk
-                        # Reconstruct the expected object structure for the bulk verifier
-                        c_obj = {
-                            'id': seq['contact_id'], 
-                            'email': to_email, 
-                            'company': contact.get('company', ''), 
-                            'enrichment_data': ed
-                        }
-                        verify_risky_contacts_bulk([c_obj], supabase)
-                        
-                        # Fetch the freshly saved result
-                        fresh_res = supabase.table('contacts').select('enrichment_data').eq('id', seq['contact_id']).execute()
-                        if fresh_res.data:
-                            ed = fresh_res.data[0].get('enrichment_data') or {}
-                            serper_passed = ed.get('serper_verified')
-                    except Exception as e:
-                        _log(f"OSINT FALLBACK inline failed for {to_email}: {e}", level='error')
-                
-                # Evaluate final validation decision
-                if serper_passed is True:
-                    _log(f"OSINT BOUNCE PROTECTION: Proceeding with {to_email} (Risky, but Google Verified!).")
-                else:
-                    _log(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY/Catch-All, Not Google Verified). marking as skipped.", level='warning')
-                    if not dry_run:
-                        supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
-                    stats['skipped'] += 1
-                    continue
+                _log(f"BOUNCE PROTECTION OVERRIDE: Proceeding with {to_email} despite status being RISKY.")
             # REPLY GUARD: Check if contact has replied — if so, cancel all their pending emails
             contact_status = supabase.table('contacts').select('status').eq('id', seq['contact_id']).execute()
             if contact_status.data and contact_status.data[0].get('status') == 'replied':

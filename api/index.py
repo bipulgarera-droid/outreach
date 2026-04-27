@@ -193,7 +193,111 @@ def delete_project(project_id):
         logger.error(f"Delete project error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/projects/<project_id>/duplicate', methods=['POST'])
+def duplicate_project(project_id):
+    """Duplicate a project, optionally copying contacts, sequences and templates."""
+    try:
+        import uuid as _uuid
+        data = request.json or {}
+        copy_contacts   = data.get('copy_contacts', False)
+        copy_sequences  = data.get('copy_sequences', False)
+        copy_templates  = data.get('copy_templates', False)
+
+        # --- 1. Fetch source project ---
+        src_res = supabase.table('projects').select('*').eq('id', project_id).single().execute()
+        if not src_res.data:
+            return jsonify({'error': 'Source project not found'}), 404
+        src = src_res.data
+
+        # --- 2. Create new project ---
+        new_proj = {
+            'name': src.get('name', 'Unnamed') + ' (Copy)',
+            'description': src.get('description', ''),
+            'custom_instructions': src.get('custom_instructions', ''),
+            'sender_group': src.get('sender_group', 'all'),
+            'niche': src.get('niche', ''),
+        }
+        new_proj_res = supabase.table('projects').insert(new_proj).execute()
+        new_proj_id = new_proj_res.data[0]['id']
+
+        # --- 3. Copy templates (if requested) ---
+        template_id_map = {}  # old_id -> new_id
+        if copy_templates:
+            tmpl_res = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').execute()
+            for t in (tmpl_res.data or []):
+                old_id = t['id']
+                new_t = {k: v for k, v in t.items() if k not in ('id', 'created_at')}
+                new_t['project_id'] = new_proj_id
+                ins = supabase.table('email_templates').insert(new_t).execute()
+                template_id_map[old_id] = ins.data[0]['id']
+
+        # --- 4. Copy contacts (if requested) ---
+        contact_id_map = {}  # old_id -> new_id
+        if copy_contacts:
+            # Paginate through contacts in chunks
+            offset = 0
+            while True:
+                c_res = supabase.table('contacts').select('*').eq('project_id', project_id).range(offset, offset + 999).execute()
+                chunk = c_res.data or []
+                if not chunk:
+                    break
+                for c in chunk:
+                    old_id = c['id']
+                    new_c = {k: v for k, v in c.items() if k not in ('id', 'created_at')}
+                    new_c['project_id'] = new_proj_id
+                    # Reset outreach state
+                    new_c['status'] = 'new'
+                    ins = supabase.table('contacts').insert(new_c).execute()
+                    contact_id_map[old_id] = ins.data[0]['id']
+                if len(chunk) < 1000:
+                    break
+                offset += 1000
+
+        # --- 5. Copy sequences (if requested AND contacts were copied) ---
+        if copy_sequences and copy_contacts:
+            offset = 0
+            while True:
+                s_res = supabase.table('email_sequences').select('*').eq('project_id', project_id).range(offset, offset + 999).execute()
+                chunk = s_res.data or []
+                if not chunk:
+                    break
+                to_insert = []
+                for s in chunk:
+                    new_contact_id = contact_id_map.get(s['contact_id'])
+                    if not new_contact_id:
+                        continue  # orphaned sequence — skip
+                    new_s = {k: v for k, v in s.items() if k not in ('id', 'created_at')}
+                    new_s['project_id'] = new_proj_id
+                    new_s['contact_id'] = new_contact_id
+                    # Remap template id if templates were also copied
+                    if copy_templates and s.get('template_id') in template_id_map:
+                        new_s['template_id'] = template_id_map[s['template_id']]
+                    # Reset sequence state
+                    new_s['status'] = 'pending'
+                    new_s['sent_at'] = None
+                    to_insert.append(new_s)
+                if to_insert:
+                    supabase.table('email_sequences').insert(to_insert).execute()
+                if len(chunk) < 1000:
+                    break
+                offset += 1000
+
+        return jsonify({
+            'success': True,
+            'new_project_id': new_proj_id,
+            'new_project_name': new_proj['name'],
+            'copied': {
+                'contacts': len(contact_id_map),
+                'templates': len(template_id_map),
+                'sequences': copy_sequences and copy_contacts,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Duplicate project error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/projects', methods=['POST'])
+
 def create_project():
     try:
         data = request.json
@@ -1212,6 +1316,146 @@ def trigger_manual_verification():
 
     except Exception as e:
         logger.error(f"Manual verification endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/verify-reacher', methods=['POST'])
+def trigger_reacher_verification():
+    """Verify selected contacts via the local Reacher Docker container (localhost:8080)."""
+    try:
+        data = request.json or {}
+        contact_ids = data.get('contact_ids', [])
+        if not contact_ids:
+            return jsonify({'error': 'No contact IDs provided'}), 400
+
+        # Quick health check before spinning up a background thread
+        from execution.verify_reacher import is_reacher_available
+        if not is_reacher_available():
+            return jsonify({'error': 'Reacher Docker container is not running. Start it with: docker run -d -p 8080:8080 reacherhq/backend:latest'}), 503
+
+        import threading, uuid as _uuid
+        job_id = str(_uuid.uuid4())
+        _verify_jobs[job_id] = {
+            'status': 'processing',
+            'total': len(contact_ids),
+            'done': 0,
+            'skipped': 0,
+            'valid': 0,
+            'error': None
+        }
+
+        def run_reacher_verification():
+            from execution.verify_reacher import check_email_reacher
+            from supabase import create_client as _create_client
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            import json as _json
+
+            _sb = _create_client(SUPABASE_URL, effective_key)
+            job_in_mem = _verify_jobs[job_id]
+            job = JobLogger("Verify Emails (Docker)")
+            try:
+                job.info(f"Starting Reacher Docker verification for {len(contact_ids)} contacts...")
+
+                # Fetch contacts from DB in chunks
+                all_contacts_data = []
+                chunk_size = 100
+                for i in range(0, len(contact_ids), chunk_size):
+                    chunk = contact_ids[i:i + chunk_size]
+                    chunk_res = _sb.table('contacts').select('id, email, company, enrichment_data').in_('id', chunk).execute()
+                    if chunk_res.data:
+                        all_contacts_data.extend(chunk_res.data)
+
+                if not all_contacts_data:
+                    job_in_mem['status'] = 'done'
+                    return
+
+                to_verify = []
+                for c in all_contacts_data:
+                    enrichment_data = c.get('enrichment_data') or {}
+                    if isinstance(enrichment_data, str):
+                        try: enrichment_data = _json.loads(enrichment_data)
+                        except: enrichment_data = {}
+                    c['enrichment_data'] = enrichment_data
+
+                    if not c.get('email'):
+                        job_in_mem['done'] += 1
+                        job_in_mem['skipped'] += 1
+                    else:
+                        to_verify.append(c)
+
+                def verify_one(c):
+                    email = c['email']
+                    enrichment_data = c.get('enrichment_data') or {}
+                    logger.info(f"Reacher Verification: Checking {email} for contact {c['id']}")
+                    v_status, v_reason = check_email_reacher(email)
+                    enrichment_data['verification_status'] = v_status
+                    enrichment_data['verification_reason'] = v_reason
+                    enrichment_data['verified_via'] = 'reacher_docker'
+                    return c['id'], email, v_status, enrichment_data
+
+                # Reacher handles its own SMTP so we can safely run 10 concurrent requests
+                MAX_WORKERS = 10
+
+                valid_count = 0
+                risky_count = 0
+                skipped_count = 0
+                docker_offline_count = 0
+
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    futures = {executor.submit(verify_one, c): c for c in to_verify}
+                    for future in as_completed(futures):
+                        try:
+                            contact_id, email, v_status, enrichment_data = future.result()
+                            if v_status == 'invalid':
+                                logger.warning(f"  ❌ Reacher: {email} is INVALID. Clearing email.")
+                                _sb.table('contacts').update({
+                                    'email': None,
+                                    'status': 'skipped',
+                                    'enrichment_data': enrichment_data
+                                }).eq('id', contact_id).execute()
+                                skipped_count += 1
+                            elif v_status == 'unknown':
+                                # Docker went offline mid-batch
+                                docker_offline_count += 1
+                                job.info(f"⚠️ Docker offline for {email}, skipping")
+                            else:
+                                job.info(f"Reacher verified {email}: {v_status.upper()}")
+                                _sb.table('contacts').update({
+                                    'enrichment_data': enrichment_data
+                                }).eq('id', contact_id).execute()
+                                if v_status == 'risky':
+                                    risky_count += 1
+                                else:
+                                    valid_count += 1
+                        except Exception as e:
+                            logger.error(f"Reacher verification worker error: {e}")
+                            skipped_count += 1
+                        finally:
+                            job_in_mem['done'] += 1
+                            job_in_mem['valid'] = valid_count
+
+                summary = f"Reacher verification complete. ✅ Valid: {valid_count} | ⚠️ Risky: {risky_count} | ❌ Invalid: {skipped_count}"
+                if docker_offline_count > 0:
+                    summary += f" | 🐳 Docker offline: {docker_offline_count}"
+                job.success(summary)
+                job.complete('completed')
+                job_in_mem['status'] = 'done'
+                job_in_mem['skipped'] = skipped_count
+
+            except Exception as e:
+                logger.error(f"Background Reacher verification failed: {e}")
+                job.error(f"Reacher verification failed: {e}")
+                job.complete('failed')
+                job_in_mem['status'] = 'error'
+                job_in_mem['error'] = str(e)
+
+        thread = threading.Thread(target=run_reacher_verification)
+        thread.start()
+
+        return jsonify({'job_id': job_id, 'total': len(contact_ids), 'status': 'processing'}), 202
+
+    except Exception as e:
+        logger.error(f"Reacher verification endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
