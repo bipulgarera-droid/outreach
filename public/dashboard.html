@@ -1518,6 +1518,9 @@
                     <button onclick="verifySelectedContacts()" class="bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-emerald-500/30 ml-auto mr-2">
                         <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Verify Emails
                     </button>
+                    <button onclick="verifyDockerContacts()" class="bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-cyan-500/30 mr-2" title="Verify via local Reacher Docker container">
+                        <i data-lucide="container" class="w-3.5 h-3.5"></i> Verify (Docker)
+                    </button>
                 </div>
             `;
 
@@ -2255,6 +2258,45 @@
             await _startVerify(ids);
         }
 
+        // ── Docker (Reacher) Verification ────────────────────────────────────
+        async function _startVerifyDocker(ids) {
+            _showVerifyBanner(ids.length);
+            // Update banner label to show Docker mode
+            const b = document.getElementById('verifyProgressBanner');
+            if (b) {
+                const label = b.querySelector('span.text-sm');
+                if (label) label.innerHTML = '<span class="inline-block w-3 h-3 rounded-full bg-cyan-500 animate-pulse"></span> Verifying emails via Docker...';
+            }
+            try {
+                const res = await apiFetch('/api/contacts/verify-reacher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contact_ids: ids })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                _pollVerifyProgress(data.job_id, ids.length);
+            } catch (e) {
+                const b = document.getElementById('verifyProgressBanner');
+                if (b) b.remove();
+                showToast('❌ ' + e.message);
+            }
+        }
+
+        async function verifyDockerContacts() {
+            const ids = getSelectedContactIds();
+            if (!ids.length) return alert('Select contacts to verify');
+            if (!confirm(`Verify emails for ${ids.length} contacts via Docker (Reacher)? Invalid emails will be cleared.`)) return;
+            await _startVerifyDocker(ids);
+        }
+
+        async function verifyDockerSequences() {
+            const ids = [...document.querySelectorAll('.seq-check:checked')].map(cb => cb.value);
+            if (!ids.length) return alert('Select sequences to verify (check the box next to the contact name)');
+            if (!confirm(`Verify emails for ${ids.length} contacts via Docker (Reacher)? Invalid emails will be cleared.`)) return;
+            await _startVerifyDocker(ids);
+        }
+
         async function loadSequences(area, actions) {
             let url = '/api/sequences';
             if (currentSideTab !== 'all-seq') {
@@ -2281,6 +2323,9 @@
                     </button>
                     <button onclick="verifySelectedSequences()" id="btnVerifySelectedSeq" class="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-4 py-2 rounded-lg text-sm font-medium border border-transparent transition-all">
                         <i data-lucide="shield-check" class="w-4 h-4 inline mr-1"></i> Verify Emails
+                    </button>
+                    <button onclick="verifyDockerSequences()" class="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 px-4 py-2 rounded-lg text-sm font-medium border border-transparent transition-all" title="Verify via local Reacher Docker container">
+                        <i data-lucide="container" class="w-4 h-4 inline mr-1"></i> Verify (Docker)
                     </button>
                     <button id="btnDeleteSelectedSeq" onclick="deleteSelectedSeqs()" class="hidden bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
                         <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i> Delete Selected
@@ -2964,10 +3009,10 @@
         }
 
         async function sendSelectedSequences() {
-            const selectedIds = getSelectedContactIds();
-            if (!selectedIds.length) return alert('Select at least one sequence step to send.');
+            const selectedIds = [...document.querySelectorAll('.seq-check:checked')].map(cb => cb.value);
+            if (!selectedIds.length) return alert('Select at least one contact to send their next pending step.');
 
-            if (!confirm(`Are you sure you want to send strictly the ${selectedIds.length} selected sequence steps now?`)) return;
+            if (!confirm(`Are you sure you want to send the next pending step for the ${selectedIds.length} selected contacts now?`)) return;
 
             const btn = document.getElementById('btnSendSelected');
             const origHtml = btn.innerHTML;
@@ -2987,7 +3032,7 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                showToast(`✅ Successfully dispatched ${data.sent || 0} emails!`);
+                showToast(`🚀 Background dispatch started for selected contacts!`);
                 loadContent();
                 fetchSmtpCapacity();
             } catch (e) {

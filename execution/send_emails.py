@@ -81,10 +81,13 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
     def build_send_query():
         q = supabase.table('email_sequences') \
             .select('*, contacts(name, email, enrichment_data)') \
-            .eq('status', 'pending') \
-            .lte('scheduled_at', now)
+            .eq('status', 'pending')
+        
         if contact_ids:
             q = q.in_('contact_id', contact_ids)
+        else:
+            q = q.lte('scheduled_at', now)
+            
         if project_id:
             q = q.eq('project_id', project_id)
         return q.order('scheduled_at')
@@ -111,6 +114,7 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
             
 
     stats = {'processed': 0, 'sent': 0, 'skipped': 0, 'errors': 0}
+    sent_contact_ids = set()
     
     for seq in sequences:
         # Stop once we've SENT enough (skips/errors don't count against limit)
@@ -187,10 +191,12 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
                 continue
             
             # ── PRE-SEND DUPLICATE GUARD ───────────────────────────────
-            # Re-check the DB status and scheduled_at BEFORE sending.
-            # When Step 1 fires, it reschedules Steps 2,3,4 into the future.
-            # But those steps are already loaded in memory from the initial query.
-            # Without this guard, they'd all get sent in the same loop iteration.
+            if seq['contact_id'] in sent_contact_ids:
+                logger.warning(f"  PRE-SEND GUARD: Skipping seq {seq['id']} step {seq['step_number']} to {to_email} — already sent a preceding step to this contact in this run.")
+                stats['skipped'] += 1
+                stats['processed'] += 1
+                continue
+
             if not dry_run:
                 recheck = supabase.table('email_sequences') \
                     .select('status, scheduled_at') \
@@ -203,11 +209,10 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
                     stats['processed'] += 1
                     continue
                 
-                # CRITICAL: If a preceding step in this loop rescheduled this step
-                # to the future, do NOT send it now.
+                # If doing a normal daily run, strictly enforce the schedule
                 db_scheduled = recheck.data.get('scheduled_at')
-                if db_scheduled and db_scheduled > datetime.utcnow().isoformat():
-                    logger.warning(f"  PRE-SEND GUARD: Skipping seq {seq['id']} step {seq['step_number']} to {to_email} — rescheduled to {db_scheduled} by a preceding step.")
+                if not contact_ids and db_scheduled and db_scheduled > datetime.utcnow().isoformat():
+                    logger.warning(f"  PRE-SEND GUARD: Skipping seq {seq['id']} step {seq['step_number']} to {to_email} — scheduled in the future ({db_scheduled}).")
                     stats['skipped'] += 1
                     stats['processed'] += 1
                     continue
@@ -254,6 +259,8 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
                         'status': 'sent',
                         'sent_at': now_sent.isoformat()
                     }).eq('id', seq['id']).execute()
+                    
+                    sent_contact_ids.add(seq['contact_id'])
                     
                     # -------------------------------------------------------
                     # RESCHEDULE: Update subsequent pending steps relative to
