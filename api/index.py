@@ -2029,15 +2029,13 @@ Follow this strict structure:
 
 2. The Observation (Paragraph 2): In a NEW paragraph after the greeting, casually mention you took a look at their site and noticed the top 1-2 technical issues (mention 2 if they fit naturally in one flowing sentence, otherwise just 1). Weave the business implication naturally into the same short paragraph (e.g., "which often leads to visitors bouncing before they engage"). Use soft, probabilistic language ("often leads to", "can make the site feel"). Do NOT sound aggressive or accusatory. CRITICAL: Use ONLY plain business language. NEVER use developer jargon like "LCP", "main thread", "render-blocking", "DOM", "TBT", "CLS", "FCP", or any technical acronyms. Describe issues the way a business consultant would explain them to a CEO.
 
-3. The Core Offer (Paragraph 3): In ANOTHER new paragraph, transition into the original template's core offer. Preserve the template's original pitch, social proof, and CTA almost verbatim, just lightly paraphrase ~20% of the wording. Do NOT merge the offer into the observation paragraph.
+3. The Rest of the Email: Reproduce the original template body EXACTLY as structured. If the template has the offer, social proof, CTA, and sign-off as SEPARATE paragraphs, you MUST keep them as SEPARATE paragraphs. Do NOT merge them. Lightly paraphrase ~20% of wording for uniqueness but KEEP EVERY SINGLE LINE BREAK from the original template intact.
 
-4. The Sign-off: Keep the original closing (e.g., "Best, Bipul") exactly as written.
+4. CRITICAL FORMATTING: Count the paragraphs in the original template. Your output MUST have the SAME number of paragraphs PLUS the observation paragraph you added. Use double line breaks between EVERY paragraph. If you merge multiple template paragraphs into one, you have FAILED.
 
-5. CRITICAL FORMATTING: You MUST use double line breaks (\\n\\n) between every paragraph: greeting, observation, offer, and sign-off. DO NOT merge the entire email into one giant block of text! The output should have 4+ visible paragraphs, matching the template's spacing.
+5. Keep the total email under 100 words.
 
-6. Keep the total email under 90 words.
-
-For EMAIL_2 onwards, just do the standard paraphrasing as normal, while preserving the original paragraph structure and line breaks.
+For EMAIL_2 onwards, preserve the original paragraph structure and line breaks exactly.
 """
         elif company_context:
             system += f"""
