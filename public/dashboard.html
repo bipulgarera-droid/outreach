@@ -531,6 +531,7 @@
                 { id: 'new', label: 'New' },
                 { id: 'enriched', label: 'Enriched' },
                 { id: 'audited', label: 'Audited' },
+                { id: 'not_audited', label: 'Not Audited' },
                 { id: 'icebreaker_ready', label: 'Icebreaker Ready' },
                 { id: 'in_sequence', label: 'In Sequence' },
                 { id: 'replied', label: 'Replied' },
@@ -1483,7 +1484,9 @@
         // =========================================================================
         async function loadContacts(area, actions) {
             const isAuditedTab = currentSideTab === 'audited';
-            const statusFilter = (currentSideTab === 'all' || isAuditedTab) ? '' : currentSideTab;
+            const isNotAuditedTab = currentSideTab === 'not_audited';
+            const isLocalFilter = isAuditedTab || isNotAuditedTab;
+            const statusFilter = (currentSideTab === 'all' || isLocalFilter) ? '' : currentSideTab;
             const url = `/api/contacts?limit=100000${statusFilter ? `&status=${statusFilter}` : ''}`;
             const res = await apiFetch(url);
             const data = await res.json();
@@ -1492,6 +1495,14 @@
             
             if (isAuditedTab) {
                 contactsCache = contactsCache.filter(c => c.enrichment_data && c.enrichment_data.lighthouse_audit);
+            } else if (isNotAuditedTab) {
+                // Show only enriched contacts (have enrichment_data with a verification status) that lack audit data
+                contactsCache = contactsCache.filter(c => {
+                    const ed = c.enrichment_data;
+                    const isEnriched = ed && (ed.verification_status || ed.company_info || ed.company_context);
+                    const hasAudit = ed && ed.lighthouse_audit;
+                    return isEnriched && !hasAudit;
+                });
             }
 
             actions.innerHTML = `
