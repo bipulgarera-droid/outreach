@@ -1054,6 +1054,11 @@ def trigger_seo_audit():
                     
                     if not website.startswith('http'):
                         website = 'https://' + website
+                    
+                    # Sanitize URL: strip paths, query params, UTMs — audit the homepage only
+                    from urllib.parse import urlparse
+                    parsed = urlparse(website)
+                    website = f"{parsed.scheme}://{parsed.netloc}"
                         
                     job_logger.info(f"[{index+1}/{len(contact_ids)}] Analyzing {website}...")
                     audit_result = fetch_pagespeed_scores(website, strategy="mobile")
@@ -2178,7 +2183,11 @@ def create_sequences():
                 if not name: return ""
                 name = name.strip()
                 
-                # 0. Strip pipe/comma-separated SEO junk from Google Maps titles
+                # 0a. Strip parenthetical junk from Gosom/Growthscout
+                # e.g. "Compare Power (No Deposit..." → "Compare Power"
+                name = _re.sub(r'\s*\(.*$', '', name).strip()
+                
+                # 0b. Strip pipe/comma-separated SEO junk from Google Maps titles
                 # e.g. "Capital Signs | Custom DTF Transfers | UV DTF | ..." → "Capital Signs"
                 # e.g. "Sir Speedy Print, Signs, Marketing" → "Sir Speedy Print"
                 for sep_char in ['|', ',']:
