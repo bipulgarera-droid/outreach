@@ -2035,17 +2035,13 @@ EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
 Instead of a generic compliment, you MUST use the technical failures listed above to craft a consultative, personalized observation. 
 Follow this strict structure:
 
-1. The Greeting: Keep the exact original greeting from the template perfectly intact.
+1. The Greeting & Opening: Merge the greeting and the opening observation into a single line. Start the sentence with a casual variation of "Hey! I just visited your website and found that..." (slightly paraphrase this opening for each contact to ensure uniqueness). If the original template uses {{first_name}}, you MUST use it in the greeting (e.g., "Hey {{first_name}}! I was checking out your site and noticed...").
 
-2. The Observation: This paragraph REPLACES the template's compliment/icebreaker line (e.g., "Love the work you're doing at..."). Do NOT keep both — the audit observation IS the icebreaker. Keep this paragraph SHORT — ideally 1-2 sentences max. Lead with the biggest number from the [METRIC] tags (e.g., "noticed it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence in the same sentence using a comma (e.g., ", which often leads to visitors dropping off before the page even appears"). If mentioning a second issue, add ONE short follow-up sentence with the expert term (e.g., "It also looks like some render-blocking scripts are delaying the initial load."). NEVER pad with filler words like "Specifically" or "I noticed a couple of things that might be impacting". Be direct. Never say vague things like "takes a while" or "a bit of time" — always use exact numbers.
+2. The Observation: Immediately follow the opening phrase in the SAME paragraph. Lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence in the same sentence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence with the expert term. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers. Do NOT keep the template's original compliment/icebreaker line (e.g., "Love the work you're doing at..."). The audit observation REPLACES it.
 
-3. The Rest of the Email: Reproduce the original template body EXACTLY as structured. If the template has the offer, social proof, CTA, and sign-off as SEPARATE paragraphs, you MUST keep them as SEPARATE paragraphs. Do NOT merge them. Lightly paraphrase ~20% of wording for uniqueness but KEEP EVERY SINGLE LINE BREAK from the original template intact.
+3. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent. If the template has the offer, CTA, and sign-off as SEPARATE paragraphs, you MUST keep them as SEPARATE paragraphs. Do NOT merge them. KEEP EVERY SINGLE LINE BREAK from the original template intact.
 
 4. CRITICAL FORMATTING: The observation REPLACES the compliment line, so your output should have the SAME number of paragraphs as the original template. Use double line breaks between EVERY paragraph. If you merge multiple template paragraphs into one, you have FAILED.
-
-5. Keep the total email under 100 words.
-
-For EMAIL_2 onwards, preserve the original paragraph structure and line breaks exactly.
 """
         elif company_context:
             system += f"""
