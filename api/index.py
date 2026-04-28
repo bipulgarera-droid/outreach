@@ -1028,10 +1028,12 @@ def trigger_seo_audit():
         import threading
         
         def run_audit_task():
-            logger.info(f"Starting background SEO audit task for {len(contact_ids)} contacts")
+            from execution.log_manager import JobLogger
+            job_logger = JobLogger("SEO Website Audit")
+            job_logger.info(f"Starting background SEO audit task for {len(contact_ids)} contacts")
             from execution.pagespeed_insights import fetch_pagespeed_scores
             
-            for contact_id in contact_ids:
+            for index, contact_id in enumerate(contact_ids):
                 try:
                     res = supabase.table('contacts').select('website, enrichment_data').eq('id', contact_id).execute()
                     if not res.data: continue
@@ -1043,6 +1045,7 @@ def trigger_seo_audit():
                     if not website.startswith('http'):
                         website = 'https://' + website
                         
+                    job_logger.info(f"[{index+1}/{len(contact_ids)}] Analyzing {website}...")
                     audit_result = fetch_pagespeed_scores(website, strategy="mobile")
                     
                     if audit_result and audit_result.get("success"):
@@ -1056,14 +1059,15 @@ def trigger_seo_audit():
                         supabase.table('contacts').update({
                             'enrichment_data': enrichment_data
                         }).eq('id', contact_id).execute()
-                        logger.info(f"Successfully audited {website}")
+                        perf_score = audit_result.get("scores", {}).get("performance", 0)
+                        job_logger.success(f"[{index+1}/{len(contact_ids)}] Successfully audited {website} (Score: {perf_score})")
                     else:
-                        logger.error(f"Audit failed for {website}: {audit_result.get('error') if audit_result else 'Unknown'}")
+                        error_msg = audit_result.get('error') if audit_result else 'Unknown error'
+                        job_logger.error(f"[{index+1}/{len(contact_ids)}] Audit failed for {website}: {error_msg}")
                 except Exception as e:
-                    logger.error(f"Error processing audit for {contact_id}: {e}")
+                    job_logger.error(f"[{index+1}/{len(contact_ids)}] Exception processing audit for {contact_id}: {e}")
                     
-            logger.info("Background SEO audit task complete.")
-
+            job_logger.complete()
         thread = threading.Thread(target=run_audit_task)
         thread.daemon = True
         thread.start()
