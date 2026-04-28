@@ -26,6 +26,10 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
     Returns:
         Dict with scores and metrics, or None on error
     """
+    # Prefer https:// over http://
+    if url.startswith('http://') and not url.startswith('http://localhost'):
+        url = url.replace('http://', 'https://', 1)
+    
     for attempt in range(max_retries):
         try:
             params = {
@@ -36,6 +40,13 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
             }
             
             response = requests.get(PAGESPEED_API, params=params, timeout=120)
+            
+            # If https:// fails with 400, try http:// as fallback
+            if response.status_code == 400 and url.startswith('https://'):
+                fallback_url = url.replace('https://', 'http://', 1)
+                print(f"HTTPS failed for {url}, trying HTTP fallback: {fallback_url}")
+                params["url"] = fallback_url
+                response = requests.get(PAGESPEED_API, params=params, timeout=120)
             
             # Handle rate limiting
             if response.status_code == 429:
@@ -135,9 +146,9 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
             if audits.get("dom-size", {}).get("score", 1) < 0.9:
                 prioritized_audits.append({"id": "dom-size", "title": "Excessive DOM size", "description": "The site has an excessively bloated structure, causing sluggish scrolling.", "score": 5})
             
-            # Sort by score descending and take Top 2
+            # Sort by score descending and take Top 5
             prioritized_audits.sort(key=lambda x: x["score"], reverse=True)
-            top_audits = prioritized_audits[:2]
+            top_audits = prioritized_audits[:5]
             
             return {
                 "url": url,
