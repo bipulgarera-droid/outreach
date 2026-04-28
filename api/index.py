@@ -2027,7 +2027,7 @@ Follow this strict structure:
 
 1. The Greeting: Keep the exact original greeting from the template perfectly intact.
 
-2. The Observation (Paragraph 2): In a NEW paragraph after the greeting, casually mention you took a look at their site and noticed a specific technical issue. Weave the business implication naturally into the same short paragraph (e.g., "which often leads to visitors bouncing before they engage"). Use soft, probabilistic language ("often leads to", "can make the site feel"). Do NOT sound aggressive or accusatory.
+2. The Observation (Paragraph 2): In a NEW paragraph after the greeting, casually mention you took a look at their site and noticed a specific technical issue. Weave the business implication naturally into the same short paragraph (e.g., "which often leads to visitors bouncing before they engage"). Use soft, probabilistic language ("often leads to", "can make the site feel"). Do NOT sound aggressive or accusatory. CRITICAL: Use ONLY plain business language. NEVER use developer jargon like "LCP", "main thread", "render-blocking", "DOM", "TBT", "CLS", "FCP", or any technical acronyms. Describe issues the way a business consultant would explain them to a CEO.
 
 3. The Core Offer (Paragraph 3): In ANOTHER new paragraph, transition into the original template's core offer. Preserve the template's original pitch, social proof, and CTA almost verbatim, just lightly paraphrase ~20% of the wording. Do NOT merge the offer into the observation paragraph.
 

@@ -105,46 +105,46 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
             # --- TIER 1 (Score 8-10) ---
             lcp_ms = lcp.get("numericValue", 0)
             if lcp_ms > 5000:
-                prioritized_audits.append({"id": "lcp-critical", "title": "Load time > 5s", "description": "Mobile site takes over 5 seconds to load (LCP), causing massive visitor drop-off before engaging.", "score": 10})
+                prioritized_audits.append({"id": "lcp-critical", "title": "Slow mobile load time", "description": "The site takes over 5 seconds to show up on mobile, so most visitors leave before they even see your content.", "score": 10})
             elif lcp_ms > 3000:
-                prioritized_audits.append({"id": "lcp-poor", "title": "Load time > 3s", "description": "Mobile site load time is slow (LCP > 3s), which usually leads to visitors bouncing.", "score": 9})
+                prioritized_audits.append({"id": "lcp-poor", "title": "Slow mobile load time", "description": "The site takes a few seconds too long to load on phones, which often means visitors leave before the page finishes loading.", "score": 9})
                 
             tbt_ms = tbt.get("numericValue", 0)
             if tbt_ms > 300:
-                prioritized_audits.append({"id": "tbt-critical", "title": "Main thread blocked", "description": "The site freezes for hundreds of milliseconds while loading, making it feel unresponsive to taps.", "score": 9})
+                prioritized_audits.append({"id": "tbt-critical", "title": "Site freezes on mobile", "description": "The site temporarily freezes while loading on phones, so visitors can't tap or scroll for a noticeable moment.", "score": 9})
                 
             cls_val = cls_audit.get("numericValue", 0)
             if cls_val > 0.25:
-                prioritized_audits.append({"id": "cls-critical", "title": "Visual layout shift", "description": "The site layout jumps around while loading, causing users to accidentally click the wrong buttons.", "score": 8})
+                prioritized_audits.append({"id": "cls-critical", "title": "Content jumps around", "description": "Elements on the page shift around while loading, which can cause visitors to accidentally tap the wrong thing.", "score": 8})
                 
             fcp_ms = fcp.get("numericValue", 0)
             if fcp_ms > 3000:
-                prioritized_audits.append({"id": "fcp-poor", "title": "Blank screen > 3s", "description": "Visitors stare at a blank white screen for over 3 seconds before seeing any content.", "score": 8})
+                prioritized_audits.append({"id": "fcp-poor", "title": "Blank screen on load", "description": "Visitors see a blank white screen for several seconds before anything appears, which usually makes them hit the back button.", "score": 8})
                 
             if audits.get("render-blocking-resources", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "render-blocking", "title": "Render blocking code", "description": "Heavy scripts are blocking the page from rendering properly, frustrating mobile visitors.", "score": 9})
+                prioritized_audits.append({"id": "render-blocking", "title": "Slow page rendering", "description": "The site has code that delays the page from appearing, keeping visitors waiting longer than they should.", "score": 9})
                 
             if audits.get("unused-javascript", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "unused-js", "title": "Unused Javascript bloat", "description": "The site is bogged down by unused code, slowing everything down.", "score": 8})
+                prioritized_audits.append({"id": "unused-js", "title": "Excess code slowing things down", "description": "The site is carrying extra unused code that slows everything down for no reason.", "score": 8})
                 
             if audits.get("uses-optimized-images", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "heavy-images", "title": "Uncompressed images", "description": "Images are heavy and uncompressed, severely slowing down mobile load times.", "score": 8})
+                prioritized_audits.append({"id": "heavy-images", "title": "Heavy images", "description": "The images on the site are larger than they need to be, which makes pages load noticeably slower on mobile.", "score": 8})
                 
             # --- TIER 2 (Score 5-7) ---
             if scores["performance"] < 50:
-                prioritized_audits.append({"id": "low-perf", "title": "Poor overall performance", "description": "The overall mobile performance score is critically low, a massive red flag for Google's mobile-first indexing.", "score": 7})
+                prioritized_audits.append({"id": "low-perf", "title": "Low mobile performance", "description": "The overall mobile speed score is quite low, which can hurt how Google ranks the site in search results.", "score": 7})
                 
             if audits.get("viewport", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "viewport", "title": "Not mobile optimized", "description": "The site isn't scaling properly for mobile screens.", "score": 7})
+                prioritized_audits.append({"id": "viewport", "title": "Not mobile friendly", "description": "The site doesn't adapt properly to phone screens, so visitors have to pinch and zoom to read anything.", "score": 7})
                 
             if audits.get("meta-description", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "meta-desc", "title": "Missing meta description", "description": "The site is missing a meta description, so Google doesn't know how to display it in search results.", "score": 6})
+                prioritized_audits.append({"id": "meta-desc", "title": "Missing search description", "description": "The site is missing the short summary that shows up in Google search results, so potential visitors don't know what to expect.", "score": 6})
                 
             if audits.get("crawlable-anchors", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "uncrawlable", "title": "Uncrawlable links", "description": "Some buttons or links are coded in a way that Google's bots literally can't follow them.", "score": 6})
+                prioritized_audits.append({"id": "uncrawlable", "title": "Hidden links from Google", "description": "Some links on the site are set up in a way that Google can't follow them, meaning those pages might not show up in search.", "score": 6})
                 
             if audits.get("dom-size", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "dom-size", "title": "Excessive DOM size", "description": "The site has an excessively bloated structure, causing sluggish scrolling.", "score": 5})
+                prioritized_audits.append({"id": "dom-size", "title": "Overly complex page", "description": "The page structure is overly complex, which makes scrolling feel sluggish on phones.", "score": 5})
             
             # Sort by score descending and take Top 5
             prioritized_audits.sort(key=lambda x: x["score"], reverse=True)
