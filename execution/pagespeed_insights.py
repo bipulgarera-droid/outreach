@@ -165,10 +165,17 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
             }
             
         except requests.exceptions.Timeout:
-            print(f"PageSpeed API timeout for {url}")
+            wait_time = (attempt + 1) * 15  # 15s, 30s, 45s
+            print(f"PageSpeed API timeout for {url}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+            if attempt < max_retries - 1:
+                time.sleep(wait_time)
+                continue
             return {"url": url, "success": False, "error": "timeout"}
         except requests.exceptions.RequestException as e:
             print(f"PageSpeed API error for {url}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(10)
+                continue
             return {"url": url, "success": False, "error": str(e)}
         except Exception as e:
             print(f"Unexpected error fetching PageSpeed for {url}: {e}")
