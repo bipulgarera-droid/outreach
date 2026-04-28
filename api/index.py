@@ -2024,11 +2024,20 @@ The following are the top technical failures found on their website:
 EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
 Instead of a generic compliment, you MUST use the technical failures listed above to craft a consultative, personalized observation. 
 Follow this strict structure:
+
 1. The Greeting: Keep the exact original greeting from the template perfectly intact.
-2. The Observation (Line 2): Start by mentioning you checked their site and casually bring up the technical issue. 
-3. The Business Impact: Add ONE short sentence explaining the business implication of this issue for a {c_niche} business in {c_loc} (e.g., "which usually leads to visitors bouncing" or "which can hurt lead conversion"). Do not sound aggressive (do NOT say "you are losing half your traffic"). Use probabilistic language ("often leads to", "can make the site feel").
-4. The Transition: Bridge into the core offer logically.
-5. Keep the email under 75 words.
+
+2. The Observation (Paragraph 2): In a NEW paragraph after the greeting, casually mention you took a look at their site and noticed a specific technical issue. Weave the business implication naturally into the same short paragraph (e.g., "which often leads to visitors bouncing before they engage"). Use soft, probabilistic language ("often leads to", "can make the site feel"). Do NOT sound aggressive or accusatory.
+
+3. The Core Offer (Paragraph 3): In ANOTHER new paragraph, transition into the original template's core offer. Preserve the template's original pitch, social proof, and CTA almost verbatim, just lightly paraphrase ~20% of the wording. Do NOT merge the offer into the observation paragraph.
+
+4. The Sign-off: Keep the original closing (e.g., "Best, Bipul") exactly as written.
+
+5. CRITICAL FORMATTING: You MUST use double line breaks (\\n\\n) between every paragraph: greeting, observation, offer, and sign-off. DO NOT merge the entire email into one giant block of text! The output should have 4+ visible paragraphs, matching the template's spacing.
+
+6. Keep the total email under 90 words.
+
+For EMAIL_2 onwards, just do the standard paraphrasing as normal, while preserving the original paragraph structure and line breaks.
 """
         elif company_context:
             system += f"""
