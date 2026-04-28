@@ -2018,7 +2018,12 @@ TECHNICAL AUDIT CONTEXT (HIGHEST PRIORITY):
 The following are the top technical failures found on their website:
 """
             for audit in audit_findings:
-                system += f"- {audit.get('title', '')}: {audit.get('description', '')}\n"
+                line = f"- {audit.get('title', '')}: {audit.get('description', '')}"
+                if audit.get('metric'):
+                    line += f" [METRIC: {audit.get('metric')}]"
+                if audit.get('expert_term'):
+                    line += f" [EXPERT TERM: {audit.get('expert_term')}]"
+                system += line + "\n"
             
             system += f"""
 EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
@@ -2027,11 +2032,11 @@ Follow this strict structure:
 
 1. The Greeting: Keep the exact original greeting from the template perfectly intact.
 
-2. The Observation (Paragraph 2): In a NEW paragraph after the greeting, casually mention you took a look at their site and noticed the top 1-2 technical issues (mention 2 if they fit naturally in one flowing sentence, otherwise just 1). Weave the business implication naturally into the same short paragraph (e.g., "which often leads to visitors bouncing before they engage"). Use soft, probabilistic language ("often leads to", "can make the site feel"). Do NOT sound aggressive or accusatory. CRITICAL: Use ONLY plain business language. NEVER use developer jargon like "LCP", "main thread", "render-blocking", "DOM", "TBT", "CLS", "FCP", or any technical acronyms. Describe issues the way a business consultant would explain them to a CEO.
+2. The Observation: This paragraph REPLACES the template's compliment/icebreaker line (e.g., "Love the work you're doing at..."). Do NOT keep both — the audit observation IS the icebreaker. Casually mention you took a look at their site and noticed the top 1-2 issues. You MUST use the actual numbers from the [METRIC] tags (e.g., "taking around 5.8 seconds to load") — never say vague things like "takes a while" or "a bit of time". You may use exactly ONE technical term from the [EXPERT TERM] tags to signal expertise (e.g., "render-blocking scripts"), but keep the rest in plain business language. Weave the business consequence naturally into the same paragraph. Use soft language ("often leads to", "can make the site feel"). Do NOT sound aggressive.
 
 3. The Rest of the Email: Reproduce the original template body EXACTLY as structured. If the template has the offer, social proof, CTA, and sign-off as SEPARATE paragraphs, you MUST keep them as SEPARATE paragraphs. Do NOT merge them. Lightly paraphrase ~20% of wording for uniqueness but KEEP EVERY SINGLE LINE BREAK from the original template intact.
 
-4. CRITICAL FORMATTING: Count the paragraphs in the original template. Your output MUST have the SAME number of paragraphs PLUS the observation paragraph you added. Use double line breaks between EVERY paragraph. If you merge multiple template paragraphs into one, you have FAILED.
+4. CRITICAL FORMATTING: The observation REPLACES the compliment line, so your output should have the SAME number of paragraphs as the original template. Use double line breaks between EVERY paragraph. If you merge multiple template paragraphs into one, you have FAILED.
 
 5. Keep the total email under 100 words.
 

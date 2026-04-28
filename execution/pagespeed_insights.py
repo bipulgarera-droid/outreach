@@ -105,13 +105,16 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
             # --- TIER 1 (Score 8-10) ---
             lcp_ms = lcp.get("numericValue", 0)
             if lcp_ms > 5000:
-                prioritized_audits.append({"id": "lcp-critical", "title": "Slow mobile load time", "description": "The site takes over 5 seconds to show up on mobile, so most visitors leave before they even see your content.", "score": 10})
+                lcp_sec = round(lcp_ms / 1000, 1)
+                prioritized_audits.append({"id": "lcp-critical", "title": "Slow mobile load time", "description": f"The site takes around {lcp_sec} seconds to load on mobile, so most visitors leave before they even see your content.", "metric": f"{lcp_sec}s load time", "expert_term": "high Largest Contentful Paint", "score": 10})
             elif lcp_ms > 3000:
-                prioritized_audits.append({"id": "lcp-poor", "title": "Slow mobile load time", "description": "The site takes a few seconds too long to load on phones, which often means visitors leave before the page finishes loading.", "score": 9})
+                lcp_sec = round(lcp_ms / 1000, 1)
+                prioritized_audits.append({"id": "lcp-poor", "title": "Slow mobile load time", "description": f"The site takes around {lcp_sec} seconds to load on phones, which often means visitors leave before the page finishes loading.", "metric": f"{lcp_sec}s load time", "expert_term": "slow Largest Contentful Paint", "score": 9})
                 
             tbt_ms = tbt.get("numericValue", 0)
             if tbt_ms > 300:
-                prioritized_audits.append({"id": "tbt-critical", "title": "Site freezes on mobile", "description": "The site temporarily freezes while loading on phones, so visitors can't tap or scroll for a noticeable moment.", "score": 9})
+                tbt_display = f"{int(tbt_ms)}ms"
+                prioritized_audits.append({"id": "tbt-critical", "title": "Site freezes on mobile", "description": f"The site freezes for about {tbt_display} while loading on phones, so visitors can't tap or scroll for a noticeable moment.", "metric": f"{tbt_display} freeze", "expert_term": "main-thread blocking", "score": 9})
                 
             cls_val = cls_audit.get("numericValue", 0)
             if cls_val > 0.25:
@@ -119,20 +122,22 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
                 
             fcp_ms = fcp.get("numericValue", 0)
             if fcp_ms > 3000:
-                prioritized_audits.append({"id": "fcp-poor", "title": "Blank screen on load", "description": "Visitors see a blank white screen for several seconds before anything appears, which usually makes them hit the back button.", "score": 8})
+                fcp_sec = round(fcp_ms / 1000, 1)
+                prioritized_audits.append({"id": "fcp-poor", "title": "Blank screen on load", "description": f"Visitors see a blank white screen for about {fcp_sec} seconds before anything appears, which usually makes them hit the back button.", "metric": f"{fcp_sec}s blank screen", "expert_term": "delayed First Contentful Paint", "score": 8})
                 
             if audits.get("render-blocking-resources", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "render-blocking", "title": "Slow page rendering", "description": "The site has code that delays the page from appearing, keeping visitors waiting longer than they should.", "score": 9})
+                prioritized_audits.append({"id": "render-blocking", "title": "Slow page rendering", "description": "The site has render-blocking scripts that delay the page from appearing, keeping visitors waiting longer than they should.", "metric": "render-blocking scripts detected", "expert_term": "render-blocking resources", "score": 9})
                 
             if audits.get("unused-javascript", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "unused-js", "title": "Excess code slowing things down", "description": "The site is carrying extra unused code that slows everything down for no reason.", "score": 8})
+                prioritized_audits.append({"id": "unused-js", "title": "Excess code slowing things down", "description": "The site is carrying unused JavaScript bundles that slow everything down for no reason.", "metric": "unused JavaScript detected", "expert_term": "unused JavaScript bundles", "score": 8})
                 
             if audits.get("uses-optimized-images", {}).get("score", 1) < 0.9:
-                prioritized_audits.append({"id": "heavy-images", "title": "Heavy images", "description": "The images on the site are larger than they need to be, which makes pages load noticeably slower on mobile.", "score": 8})
+                prioritized_audits.append({"id": "heavy-images", "title": "Heavy images", "description": "The images on the site are unoptimized and larger than they need to be, which makes pages load noticeably slower on mobile.", "metric": "unoptimized images", "expert_term": "unoptimized image assets", "score": 8})
                 
             # --- TIER 2 (Score 5-7) ---
             if scores["performance"] < 50:
-                prioritized_audits.append({"id": "low-perf", "title": "Low mobile performance", "description": "The overall mobile speed score is quite low, which can hurt how Google ranks the site in search results.", "score": 7})
+                perf_display = int(scores["performance"])
+                prioritized_audits.append({"id": "low-perf", "title": "Low mobile performance", "description": f"The overall mobile performance score is {perf_display}/100, which can hurt how Google ranks the site in search results.", "metric": f"{perf_display}/100 performance score", "expert_term": "low Core Web Vitals score", "score": 7})
                 
             if audits.get("viewport", {}).get("score", 1) < 0.9:
                 prioritized_audits.append({"id": "viewport", "title": "Not mobile friendly", "description": "The site doesn't adapt properly to phone screens, so visitors have to pinch and zoom to read anything.", "score": 7})
