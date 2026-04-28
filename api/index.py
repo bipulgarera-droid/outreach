@@ -1036,11 +1036,21 @@ def trigger_seo_audit():
             for index, contact_id in enumerate(contact_ids):
                 try:
                     res = supabase.table('contacts').select('website, enrichment_data').eq('id', contact_id).execute()
-                    if not res.data: continue
+                    if not res.data: 
+                        job_logger.warning(f"[{index+1}/{len(contact_ids)}] Contact {contact_id} not found.")
+                        continue
                     contact = res.data[0]
                     
-                    website = contact.get('website')
-                    if not website: continue
+                    enrichment_data = contact.get('enrichment_data') or {}
+                    if isinstance(enrichment_data, str):
+                        import json
+                        try: enrichment_data = json.loads(enrichment_data)
+                        except: enrichment_data = {}
+                        
+                    website = contact.get('website') or enrichment_data.get('website')
+                    if not website:
+                        job_logger.error(f"[{index+1}/{len(contact_ids)}] No website found for contact {contact_id}")
+                        continue
                     
                     if not website.startswith('http'):
                         website = 'https://' + website
