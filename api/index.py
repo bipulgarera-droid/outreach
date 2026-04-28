@@ -1013,7 +1013,67 @@ def trigger_enrichment():
             'message': f'Enrichment started in background for {len(contact_ids) if contact_ids else limit} contacts'
         })
     except Exception as e:
-        logger.error(f"Enrichment error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/contacts/audit-seo', methods=['POST'])
+def trigger_seo_audit():
+    """Trigger Lighthouse SEO audit for selected contacts in background."""
+    try:
+        data = request.json or {}
+        contact_ids = data.get('contact_ids', [])
+        
+        if not contact_ids:
+            return jsonify({'error': 'No contacts selected'}), 400
+            
+        import threading
+        
+        def run_audit_task():
+            logger.info(f"Starting background SEO audit task for {len(contact_ids)} contacts")
+            from execution.pagespeed_insights import fetch_pagespeed_scores
+            
+            for contact_id in contact_ids:
+                try:
+                    res = supabase.table('contacts').select('website, enrichment_data').eq('id', contact_id).execute()
+                    if not res.data: continue
+                    contact = res.data[0]
+                    
+                    website = contact.get('website')
+                    if not website: continue
+                    
+                    if not website.startswith('http'):
+                        website = 'https://' + website
+                        
+                    audit_result = fetch_pagespeed_scores(website, strategy="mobile")
+                    
+                    if audit_result and audit_result.get("success"):
+                        enrichment_data = contact.get('enrichment_data') or {}
+                        enrichment_data['lighthouse_audit'] = {
+                            "scores": audit_result.get("scores", {}),
+                            "metrics": audit_result.get("metrics", {}),
+                            "top_audits": audit_result.get("top_audits", [])
+                        }
+                        
+                        supabase.table('contacts').update({
+                            'enrichment_data': enrichment_data
+                        }).eq('id', contact_id).execute()
+                        logger.info(f"Successfully audited {website}")
+                    else:
+                        logger.error(f"Audit failed for {website}: {audit_result.get('error') if audit_result else 'Unknown'}")
+                except Exception as e:
+                    logger.error(f"Error processing audit for {contact_id}: {e}")
+                    
+            logger.info("Background SEO audit task complete.")
+
+        thread = threading.Thread(target=run_audit_task)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'status': 'started',
+            'message': f'SEO Audit started in background for {len(contact_ids)} contacts'
+        })
+    except Exception as e:
+        logger.error(f"SEO Audit error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1887,7 +1947,7 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None) -> list:
+def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None, audit_findings: list = None) -> list:
     """Paraphrase multiple email bodies in ONE Gemini Flash call.
     Returns a list of paraphrased strings in the same order as input.
     If anything fails, returns originals as fallback."""
@@ -1938,7 +1998,25 @@ For EACH email:
         system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
 For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
 """
-        if company_context:
+        if audit_findings and len(audit_findings) > 0:
+            system += f"""
+TECHNICAL AUDIT CONTEXT (HIGHEST PRIORITY):
+The following are the top technical failures found on their website:
+"""
+            for audit in audit_findings:
+                system += f"- {audit.get('title', '')}: {audit.get('description', '')}\n"
+            
+            system += f"""
+EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
+Instead of a generic compliment, you MUST use the technical failures listed above to craft a consultative, personalized observation. 
+Follow this strict structure:
+1. The Greeting: Keep the exact original greeting from the template perfectly intact.
+2. The Observation (Line 2): Start by mentioning you checked their site and casually bring up the technical issue. 
+3. The Business Impact: Add ONE short sentence explaining the business implication of this issue for a {c_niche} business in {c_loc} (e.g., "which usually leads to visitors bouncing" or "which can hurt lead conversion"). Do not sound aggressive (do NOT say "you are losing half your traffic"). Use probabilistic language ("often leads to", "can make the site feel").
+4. The Transition: Bridge into the core offer logically.
+5. Keep the email under 75 words.
+"""
+        elif company_context:
             system += f"""
 COMPANY SCRAPED CONTEXT: 
 - Mission: {company_context.get('mission_and_about','')}
@@ -1958,27 +2036,28 @@ Because no context is available, you MUST write a fallback observation based pur
 If the niche and location are generic (like 'business' or 'their area'), you MUST use their company name ({c_name}) instead so it sounds natural. Example: "Love the work you are doing at {c_name}."
 """
 
-        system += """
+        if not audit_findings or len(audit_findings) == 0:
+            system += """
 EMAIL_1 RULES:
 Use the provided context (or fallback) to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
 """
-        if company_info and not company_context:
-            system += f"""IMPORTANT RAW TEXT GUIDANCE:
+            if company_info and not company_context:
+                system += f"""IMPORTANT RAW TEXT GUIDANCE:
 Read through the raw website text. Find ONE highly specific, unique, or personal detail (such as a personal hobby, a hometown, or a unique founding story) OR an impressive specific business offering (like specific featured properties, a unique niche service, or an impressive portfolio piece). Just don't be boring!
 Do NOT hallucinate. If the text is absolutely too generic to pull any personal details or specific featured offerings, ONLY THEN fallback to a simple observation based on their niche ({c_niche}) and location ({c_loc}), or their company name ({c_name}).
 Example fallback: "Love the {c_niche} work you are doing in {c_loc}." (Keep this entirely on one single line, NO newlines inside the sentence).
 """
-        
-        if personalization_prompt:
-            system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
+            
+            if personalization_prompt:
+                system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
 Focus the observation SPECIFICALLY on: "{personalization_prompt}". 
 If details matching "{personalization_prompt}" are explicitly present in the COMPANY SCRAPED CONTEXT above, you MUST use them.
 If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context.
 """
-        else:
-            system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Look deep into their text to find a highly personal detail (hobby/hometown) or an impressive specific business offering (like a featured property/service), and compliment it casually. Do NOT just state their city or generic niche if they have richer details available.
+            else:
+                system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Look deep into their text to find a highly personal detail (hobby/hometown) or an impressive specific business offering (like a featured property/service), and compliment it casually. Do NOT just state their city or generic niche if they have richer details available.
 """
-        system += """
+            system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
 2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Do NOT include their website URL. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City], pretty cool stuff." OR "Saw your featured properties, really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business], really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
@@ -2300,12 +2379,14 @@ def create_sequences():
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
+                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
                     bodies_para = paraphrase_texts_batch(
                         bodies_raw, 
                         context=variables, 
                         company_context=company_context, 
                         company_info=company_info,
-                        personalization_prompt=custom_prompt
+                        personalization_prompt=custom_prompt,
+                        audit_findings=audit_findings
                     )
 
                     # ── SMART REFRESH / DEDUP CHECK ──
