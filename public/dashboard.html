@@ -530,6 +530,7 @@
                 { id: 'all', label: 'All Contacts' },
                 { id: 'new', label: 'New' },
                 { id: 'enriched', label: 'Enriched' },
+                { id: 'audited', label: 'Audited' },
                 { id: 'icebreaker_ready', label: 'Icebreaker Ready' },
                 { id: 'in_sequence', label: 'In Sequence' },
                 { id: 'replied', label: 'Replied' },
@@ -1481,11 +1482,17 @@
         // CONTACTS
         // =========================================================================
         async function loadContacts(area, actions) {
-            const statusFilter = currentSideTab === 'all' ? '' : currentSideTab;
+            const isAuditedTab = currentSideTab === 'audited';
+            const statusFilter = (currentSideTab === 'all' || isAuditedTab) ? '' : currentSideTab;
             const url = `/api/contacts?limit=100000${statusFilter ? `&status=${statusFilter}` : ''}`;
             const res = await apiFetch(url);
             const data = await res.json();
+            
             contactsCache = data.contacts || [];
+            
+            if (isAuditedTab) {
+                contactsCache = contactsCache.filter(c => c.enrichment_data && c.enrichment_data.lighthouse_audit);
+            }
 
             actions.innerHTML = `
                 <div class="flex items-center gap-2">
