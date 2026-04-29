@@ -1707,13 +1707,13 @@ def delete_template(template_id):
     try:
         # First, detach any 'sent' or 'replied' steps so we keep their history but remove the FK constraint
         try:
-            supabase.table('sequence_steps').update({'template_id': None}).in_('status', ['sent', 'replied']).eq('template_id', template_id).execute()
+            supabase.table('email_sequences').update({'template_id': None}).in_('status', ['sent', 'replied']).eq('template_id', template_id).execute()
         except Exception as e:
             logger.warning(f"Failed to nullify sent steps for template {template_id}: {e}")
             
         # Second, delete any 'pending' steps that were scheduled to use this template
         try:
-            supabase.table('sequence_steps').delete().eq('status', 'pending').eq('template_id', template_id).execute()
+            supabase.table('email_sequences').delete().eq('status', 'pending').eq('template_id', template_id).execute()
         except Exception as e:
             logger.warning(f"Failed to delete pending steps for template {template_id}: {e}")
 
