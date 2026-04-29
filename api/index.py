@@ -2413,6 +2413,7 @@ def create_sequences():
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
                     audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
+                    logger.info(f"  📋 Contact {contact.get('id')}: audit_findings={len(audit_findings)} items, has_lighthouse={bool(enrichment_data.get('lighthouse_audit'))}")
 
                     # Strip the compliment/icebreaker line from EMAIL_1 BEFORE
                     # sending to the paraphraser so the AI cannot duplicate it.
@@ -2423,6 +2424,7 @@ def create_sequences():
                         _first = bodies_raw[0]
                         # Split into paragraphs (double newline separated)
                         _paras = _re.split(r'\n\s*\n', _first)
+                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (stripping para 1 if >=3)")
                         if len(_paras) >= 3:
                             # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
                             # Remove paragraph 1 (the compliment) so the model writes its own
