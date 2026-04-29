@@ -2037,7 +2037,7 @@ Follow this strict structure:
 
 1. The Greeting: Copy the EXACT greeting line from the original template. Do NOT change it, do NOT add variables that aren't already in the template. If the template says "Hey," then output exactly "Hey," on its own line. If the template says "Hi {{first_name}}," then output exactly "Hi {{first_name}},". NEVER invent or hallucinate variables like {firstname} or {{prospectfirstname}} that do not exist in the original template.
 
-2. The Observation (NEXT paragraph, after a double line break): This paragraph REPLACES the template's compliment/icebreaker line (e.g., "Love the work you're doing at..."). DELETE the original compliment entirely. Write a new opening that starts with a slightly paraphrased variation of "I just checked out your website and noticed..." (vary this phrasing for each contact — e.g., "I was looking at your site and saw...", "I took a look at your website and found...", etc.). Then lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers.
+2. The Observation (NEXT paragraph, after a double line break): The template contains a marker line "[WRITE YOUR OBSERVATION HERE]". You MUST completely replace that entire marker with your new opening. NEVER output the text "[WRITE YOUR OBSERVATION HERE]" literally. Write a new opening that starts with a slightly paraphrased variation of "I just checked out your website and noticed..." (vary this phrasing for each contact — e.g., "I was looking at your site and saw...", "I took a look at your website and found...", etc.). Then lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers.
 
 3. The Rest of the Email: Do a very light paraphrase (~20% word changes) of the remaining template paragraphs (offer, CTA, sign-off). Keep the sentence structure mostly the same but swap a few words with natural synonyms for spam filter uniqueness. NEVER change meaning, metrics, or intent. KEEP EVERY SINGLE LINE BREAK from the original template intact. Each original paragraph must remain its own separate paragraph.
 
@@ -2088,7 +2088,7 @@ If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMP
 """
             system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
-2. The Compliment (Line 2): Start the email with a casual conversational observation based on their website or fallback data, followed by a brief compliment. Do NOT include their website URL. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City], pretty cool stuff." OR "Saw your featured properties, really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business], really stands out."
+2. The Compliment (Line 2): The template contains a marker line "[WRITE YOUR OBSERVATION HERE]". You MUST completely replace that entire marker with a casual conversational observation based on their website or fallback data, followed by a brief compliment. NEVER output the text "[WRITE YOUR OBSERVATION HERE]" literally. Do NOT include their website URL. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City], pretty cool stuff." OR "Saw your featured properties, really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business], really stands out."
 3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
 4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
 5. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
@@ -2403,34 +2403,54 @@ def create_sequences():
                     if rt is None or rt == '':
                         rt = 0
 
+                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
+
+                    # Build a fallback audit_data string from findings
+                    # so {{audit_data}} can be substituted if the AI doesn't inline it
+                    audit_data_str = ''
+                    if audit_findings and len(audit_findings) >= 1:
+                        a1 = audit_findings[0]
+                        m1 = a1.get('metric', '')
+                        t1 = a1.get('title', '')
+                        if m1:
+                            audit_data_str = f"I was looking at your website and noticed {m1}, which often means visitors leave before the page finishes loading."
+                        else:
+                            audit_data_str = f"I took a look at your website and noticed some {t1} issues that could be affecting your conversions."
+                        if len(audit_findings) >= 2:
+                            a2 = audit_findings[1]
+                            m2 = a2.get('metric', '')
+                            t2 = a2.get('title', '')
+                            if m2:
+                                audit_data_str += f" {t2} ({m2}) could also use some attention."
+                            elif t2:
+                                audit_data_str += f" {t2} could also use some attention."
+
                     variables.update({
                         'review_count': str(rc),
                         'reviewcount': str(rc),
                         'rating': str(rt),
+                        'audit_data': audit_data_str,
                     })
-                    
-                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
                     logger.info(f"  📋 Contact {contact.get('id')}: audit_findings={len(audit_findings)} items, has_lighthouse={bool(enrichment_data.get('lighthouse_audit'))}")
 
-                    # Strip the compliment/icebreaker line from EMAIL_1 BEFORE
-                    # sending to the paraphraser so the AI cannot duplicate it.
-                    # The paraphrase prompt already instructs the model to write
-                    # a fresh observation from audit data (or context), so keeping
-                    # the old compliment in the input only causes duplication.
+                    # Replace the compliment/icebreaker line in EMAIL_1 with a marker
+                    # so the AI knows exactly WHERE to write its observation.
+                    # The marker preserves paragraph structure (unlike stripping which
+                    # removes the slot entirely, causing the AI to skip it).
                     if bodies_raw:
                         _first = bodies_raw[0]
                         # Split into paragraphs (double newline separated)
                         _paras = _re.split(r'\n\s*\n', _first)
-                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (stripping para 1 if >=3)")
+                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (replacing para 1 with marker if >=3)")
                         if len(_paras) >= 3:
-                            # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
-                            # Remove paragraph 1 (the compliment) so the model writes its own
-                            _paras_clean = [_paras[0]] + _paras[2:]
-                            bodies_raw[0] = '\n\n'.join(_paras_clean)
+                            # Para 0 = greeting, Para 1 = compliment/icebreaker/{{audit_data}}/{{icebreaker}}
+                            # Replace paragraph 1 with marker so AI writes its observation here
+                            _paras[1] = '[WRITE YOUR OBSERVATION HERE]'
+                            bodies_raw[0] = '\n\n'.join(_paras)
 
                     bodies_para = paraphrase_texts_batch(
                         bodies_raw, 
@@ -2467,6 +2487,11 @@ def create_sequences():
                                 pattern = _re.compile(r'\{\{\s*' + _re.escape(key) + r'\s*\}\}', _re.IGNORECASE)
                                 subject = pattern.sub(val_str, subject)
                                 body = pattern.sub(val_str, body)
+
+                            # Safety net: if the AI failed to replace the marker, strip it
+                            body = body.replace('[WRITE YOUR OBSERVATION HERE]', '').strip()
+                            # Clean up any double blank lines left by marker removal
+                            body = _re.sub(r'\n{3,}', '\n\n', body)
 
                             if existing:
                                 if existing['status'] == 'pending':
