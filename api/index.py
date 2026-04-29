@@ -1966,7 +1966,7 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None, audit_findings: list = None) -> list:
+def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None, audit_findings: list = None, skip_observation_prompt: bool = False) -> list:
     """Paraphrase multiple email bodies in ONE Gemini Flash call.
     Returns a list of paraphrased strings in the same order as input.
     If anything fails, returns originals as fallback."""
@@ -2014,21 +2014,22 @@ For EACH email:
         c_loc = str(context.get('location', 'their area') if context else 'their area').replace('\n', ' ').replace('\r', '').strip()
         c_name = str(context.get('company', '')) if context else ''
 
-        system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
+        if not skip_observation_prompt:
+            system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
 For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
 """
-        if audit_findings and len(audit_findings) > 0:
-            system += f"""
+            if audit_findings and len(audit_findings) > 0:
+                system += f"""
 TECHNICAL AUDIT CONTEXT (HIGHEST PRIORITY):
 The following are the top technical failures found on their website:
 """
-            for audit in audit_findings:
-                line = f"- {audit.get('title', '')}: {audit.get('description', '')}"
-                if audit.get('metric'):
-                    line += f" [METRIC: {audit.get('metric')}]"
-                if audit.get('expert_term'):
-                    line += f" [EXPERT TERM: {audit.get('expert_term')}]"
-                system += line + "\n"
+                for audit in audit_findings:
+                    line = f"- {audit.get('title', '')}: {audit.get('description', '')}"
+                    if audit.get('metric'):
+                        line += f" [METRIC: {audit.get('metric')}]"
+                    if audit.get('expert_term'):
+                        line += f" [EXPERT TERM: {audit.get('expert_term')}]"
+                    system += line + "\n"
             
             system += f"""
 EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
@@ -2037,7 +2038,7 @@ Follow this strict structure:
 
 1. The Greeting: Copy the EXACT greeting line from the original template. Do NOT change it, do NOT add variables that aren't already in the template. If the template says "Hey," then output exactly "Hey," on its own line. If the template says "Hi {{first_name}}," then output exactly "Hi {{first_name}},". NEVER invent or hallucinate variables like {firstname} or {{prospectfirstname}} that do not exist in the original template.
 
-2. The Observation (NEXT paragraph, after a double line break): This paragraph REPLACES the template's compliment/icebreaker line (e.g., "Love the work you're doing at..."). DELETE the original compliment entirely. Write a new opening that starts with a slightly paraphrased variation of "I just checked out your website and noticed..." (vary this phrasing for each contact — e.g., "I was looking at your site and saw...", "I took a look at your website and found...", etc.). Then lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers.
+2. The Observation (NEXT paragraph, after a double line break): The input template has a placeholder "[INSERT_OBSERVATION_HERE]". You MUST replace this exact placeholder with your new opening. Write a new opening that starts with a slightly paraphrased variation of "I just checked out your website and noticed..." (vary this phrasing for each contact — e.g., "I was looking at your site and saw...", "I took a look at your website and found...", etc.). Then lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers.
 
 3. The Rest of the Email: Do a very light paraphrase (~20% word changes) of the remaining template paragraphs (offer, CTA, sign-off). Keep the sentence structure mostly the same but swap a few words with natural synonyms for spam filter uniqueness. NEVER change meaning, metrics, or intent. KEEP EVERY SINGLE LINE BREAK from the original template intact. Each original paragraph must remain its own separate paragraph.
 
@@ -2403,16 +2404,26 @@ def create_sequences():
                     if rt is None or rt == '':
                         rt = 0
 
+                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
+                    audit_data_str = ""
+                    if audit_findings:
+                        first_audit = audit_findings[0]
+                        metric = first_audit.get('metric', '')
+                        if metric:
+                            audit_data_str = f"I just checked out your website and noticed {metric}, which often means visitors bounce before the page finishes loading."
+                        else:
+                            audit_data_str = "I noticed some technical issues on your website that might be hurting your conversion rate."
+
                     variables.update({
                         'review_count': str(rc),
                         'reviewcount': str(rc),
                         'rating': str(rt),
+                        'audit_data': audit_data_str
                     })
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
-                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
                     logger.info(f"  📋 Contact {contact.get('id')}: audit_findings={len(audit_findings)} items, has_lighthouse={bool(enrichment_data.get('lighthouse_audit'))}")
 
                     # Strip the compliment/icebreaker line from EMAIL_1 BEFORE
@@ -2420,25 +2431,30 @@ def create_sequences():
                     # The paraphrase prompt already instructs the model to write
                     # a fresh observation from audit data (or context), so keeping
                     # the old compliment in the input only causes duplication.
-                    if bodies_raw:
+                    has_explicit_var = False
+                    if bodies_raw and ('{{icebreaker}}' in bodies_raw[0] or '{{audit_data}}' in bodies_raw[0]):
+                        has_explicit_var = True
+
+                    # Only strip and inject placeholder if we are NOT using explicit curly variables
+                    if bodies_raw and not has_explicit_var:
                         _first = bodies_raw[0]
                         # Split into paragraphs (double newline separated)
                         _paras = _re.split(r'\n\s*\n', _first)
-                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (stripping para 1 if >=3)")
+                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (injecting placeholder if >=3)")
                         if len(_paras) >= 3:
                             # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
-                            # Remove paragraph 1 (the compliment) so the model writes its own
-                            _paras_clean = [_paras[0]] + _paras[2:]
-                            bodies_raw[0] = '\n\n'.join(_paras_clean)
+                            # Replace paragraph 1 with a placeholder so the model is FORCED to fill it, preventing it from skipping the compliment.
+                            _paras[1] = "[INSERT_OBSERVATION_HERE]"
+                            bodies_raw[0] = '\n\n'.join(_paras)
 
                     bodies_para = paraphrase_texts_batch(
-
                         bodies_raw, 
                         context=variables, 
                         company_context=company_context, 
                         company_info=company_info,
                         personalization_prompt=custom_prompt,
-                        audit_findings=audit_findings
+                        audit_findings=audit_findings,
+                        skip_observation_prompt=has_explicit_var
                     )
 
                     # ── SMART REFRESH / DEDUP CHECK ──
