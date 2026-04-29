@@ -1966,7 +1966,7 @@ def delete_contact_sequences(contact_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None, audit_findings: list = None, skip_observation_prompt: bool = False) -> list:
+def paraphrase_texts_batch(bodies: list, context: dict = None, company_context: dict = None, company_info: str = None, personalization_prompt: str = None, audit_findings: list = None) -> list:
     """Paraphrase multiple email bodies in ONE Gemini Flash call.
     Returns a list of paraphrased strings in the same order as input.
     If anything fails, returns originals as fallback."""
@@ -2014,22 +2014,21 @@ For EACH email:
         c_loc = str(context.get('location', 'their area') if context else 'their area').replace('\n', ' ').replace('\r', '').strip()
         c_name = str(context.get('company', '')) if context else ''
 
-        if not skip_observation_prompt:
-            system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
+        system += f"""\n\n**CRITICAL STEP 1 INSTRUCTIONS**:
 For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
 """
-            if audit_findings and len(audit_findings) > 0:
-                system += f"""
+        if audit_findings and len(audit_findings) > 0:
+            system += f"""
 TECHNICAL AUDIT CONTEXT (HIGHEST PRIORITY):
 The following are the top technical failures found on their website:
 """
-                for audit in audit_findings:
-                    line = f"- {audit.get('title', '')}: {audit.get('description', '')}"
-                    if audit.get('metric'):
-                        line += f" [METRIC: {audit.get('metric')}]"
-                    if audit.get('expert_term'):
-                        line += f" [EXPERT TERM: {audit.get('expert_term')}]"
-                    system += line + "\n"
+            for audit in audit_findings:
+                line = f"- {audit.get('title', '')}: {audit.get('description', '')}"
+                if audit.get('metric'):
+                    line += f" [METRIC: {audit.get('metric')}]"
+                if audit.get('expert_term'):
+                    line += f" [EXPERT TERM: {audit.get('expert_term')}]"
+                system += line + "\n"
             
             system += f"""
 EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
@@ -2404,22 +2403,13 @@ def create_sequences():
                     if rt is None or rt == '':
                         rt = 0
 
-                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
-                    audit_data_str = ""
-                    if audit_findings:
-                        first_audit = audit_findings[0]
-                        metric = first_audit.get('metric', '')
-                        if metric:
-                            audit_data_str = f"I just checked out your website and noticed {metric}, which often means visitors bounce before the page finishes loading."
-                        else:
-                            audit_data_str = "I noticed some technical issues on your website that might be hurting your conversion rate."
-
                     variables.update({
                         'review_count': str(rc),
                         'reviewcount': str(rc),
                         'rating': str(rt),
-                        'audit_data': audit_data_str
                     })
+                    
+                    audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
                     bodies_raw = [t['body_template'] for t in templates_data]
@@ -2431,21 +2421,24 @@ def create_sequences():
                     # The paraphrase prompt already instructs the model to write
                     # a fresh observation from audit data (or context), so keeping
                     # the old compliment in the input only causes duplication.
-                    has_explicit_var = False
-                    if bodies_raw and ('{{icebreaker}}' in bodies_raw[0] or '{{audit_data}}' in bodies_raw[0]):
-                        has_explicit_var = True
-
-                    # Only strip and inject placeholder if we are NOT using explicit curly variables
-                    if bodies_raw and not has_explicit_var:
+                    if bodies_raw:
                         _first = bodies_raw[0]
-                        # Split into paragraphs (double newline separated)
-                        _paras = _re.split(r'\n\s*\n', _first)
-                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (injecting placeholder if >=3)")
-                        if len(_paras) >= 3:
-                            # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
-                            # Replace paragraph 1 with a placeholder so the model is FORCED to fill it, preventing it from skipping the compliment.
-                            _paras[1] = "[INSERT_OBSERVATION_HERE]"
-                            bodies_raw[0] = '\n\n'.join(_paras)
+                        if '{{audit_data}}' in _first:
+                            # If they explicitly used {{audit_data}}, just replace it directly with the placeholder
+                            bodies_raw[0] = _first.replace('{{audit_data}}', '[INSERT_OBSERVATION_HERE]')
+                            logger.info("  📝 Replaced {{audit_data}} with placeholder")
+                        elif '{{icebreaker}}' in _first:
+                            bodies_raw[0] = _first.replace('{{icebreaker}}', '[INSERT_OBSERVATION_HERE]')
+                            logger.info("  📝 Replaced {{icebreaker}} with placeholder")
+                        else:
+                            # Split into paragraphs (double newline separated)
+                            _paras = _re.split(r'\n\s*\n', _first)
+                            logger.info(f"  📝 Template paragraphs: {len(_paras)} (injecting placeholder if >=3)")
+                            if len(_paras) >= 3:
+                                # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
+                                # Replace paragraph 1 with a placeholder so the model is FORCED to fill it.
+                                _paras[1] = "[INSERT_OBSERVATION_HERE]"
+                                bodies_raw[0] = '\n\n'.join(_paras)
 
                     bodies_para = paraphrase_texts_batch(
                         bodies_raw, 
@@ -2453,8 +2446,7 @@ def create_sequences():
                         company_context=company_context, 
                         company_info=company_info,
                         personalization_prompt=custom_prompt,
-                        audit_findings=audit_findings,
-                        skip_observation_prompt=has_explicit_var
+                        audit_findings=audit_findings
                     )
 
                     # ── SMART REFRESH / DEDUP CHECK ──
