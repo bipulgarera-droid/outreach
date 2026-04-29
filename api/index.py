@@ -2037,7 +2037,10 @@ Follow this strict structure:
 
 1. The Greeting: Copy the EXACT greeting line from the original template. Do NOT change it, do NOT add variables that aren't already in the template. If the template says "Hey," then output exactly "Hey," on its own line. If the template says "Hi {{first_name}}," then output exactly "Hi {{first_name}},". NEVER invent or hallucinate variables like {firstname} or {{prospectfirstname}} that do not exist in the original template.
 
-2. The Observation (paragraph 2): This paragraph contains a draft technical observation. You SHOULD rephrase and polish it to sound more natural and consultative — like a real expert casually pointing something out. You MUST keep ALL metrics, numbers, and technical terms (like "Largest Contentful Paint", "main-thread blocking", "Core Web Vitals") EXACTLY as they appear. You may rearrange the sentence, change the opening phrase, adjust the business consequence phrasing, or make it flow better. But NEVER remove the paragraph, NEVER strip out the expert terminology, and NEVER replace it with something generic. The final result should read like a consultant who actually ran their audit, not a robot.
+2. The Observation (paragraph 2): This paragraph has TWO parts — a relatable hook and a credibility drop. You SHOULD rephrase and polish it to sound natural and consultative. Rules:
+   - The FIRST part describes a relatable problem (e.g. slow load time). Keep it in plain language — NO technical jargon. Keep the metric number exactly as-is.
+   - The SECOND part (if present) drops ONE expert technical term (e.g. "main-thread blocking", "Largest Contentful Paint"). This is the ONLY technical term in the entire email. You MUST keep it exactly as written — do NOT remove it, simplify it, or replace it with a casual word.
+   - You may rearrange words, change the opener, adjust phrasing, and make it flow better. But NEVER remove either part, NEVER strip the expert term, and NEVER replace it with something generic. It should read like a consultant casually pointing out what they found.
 
 3. The Rest of the Email: Do a very light paraphrase (~20% word changes) of the remaining template paragraphs (offer, CTA, sign-off). Keep the sentence structure mostly the same but swap a few words with natural synonyms for spam filter uniqueness. NEVER change meaning, metrics, or intent. KEEP EVERY SINGLE LINE BREAK from the original template intact. Each original paragraph must remain its own separate paragraph.
 
@@ -2402,13 +2405,13 @@ def create_sequences():
                         # AUDIT DATA PATH: Build from technical findings
                         # Sort by score (highest impact first), then pick top 2
                         _sorted = sorted(audit_findings, key=lambda x: x.get('score', 0), reverse=True)
+
+                        # ── PART 1: THE HOOK (relatable pain, NO jargon) ──
                         a1 = _sorted[0]
                         m1 = a1.get('metric', '')
                         t1 = a1.get('title', '')
-                        et1 = a1.get('expert_term', '')
                         d1 = a1.get('description', '')
 
-                        # Varied openers
                         _openers = [
                             "I was looking at your website and noticed",
                             "I checked out your site and saw",
@@ -2420,44 +2423,38 @@ def create_sequences():
                         ]
                         _opener = _random.choice(_openers)
 
-                        # Build primary finding sentence using expert_term + metric + description
-                        if m1 and et1:
-                            # Best case: expert term + metric → sounds consultative
-                            # Use description to extract a natural consequence
-                            _consequences_expert = [
-                                f"your {et1} is sitting at {m1} — {d1.split(',')[-1].strip() if ',' in d1 else d1.lower()}",
-                                f"a {et1} issue ({m1}) — {d1.lower()}",
-                                f"your {et1} is at {m1}, which is way above the recommended threshold",
-                                f"{m1} on {et1} — {d1.split(',')[-1].strip() if ',' in d1 else 'that can seriously impact conversions'}",
+                        if m1 and d1:
+                            # Best case: metric + description consequence
+                            _hooks = [
+                                f"{_opener} {m1} — {d1.lower()}",
+                                f"{_opener} it's taking around {m1} — {d1.split(',')[-1].strip().lower() if ',' in d1 else d1.lower()}",
+                                f"{_opener} {m1}, and {d1.split(',')[-1].strip().lower() if ',' in d1 else d1.lower()}",
                             ]
-                            _primary = _random.choice(_consequences_expert)
-                            observation_str = f"{_opener} {_primary}."
+                            observation_str = _random.choice(_hooks)
                         elif m1:
-                            # Has metric but no expert term
-                            observation_str = f"{_opener} {m1} — {d1.lower()}"
-                        elif et1:
-                            # Has expert term but no metric
-                            observation_str = f"{_opener} some {et1} issues — {d1.lower()}"
+                            observation_str = f"{_opener} {m1}, which is likely costing you visitors."
+                        elif d1:
+                            observation_str = f"{_opener} {d1.lower()}"
                         else:
                             observation_str = f"{_opener} some {t1} issues that could be affecting your conversions."
 
-                        # Add second finding if available
+                        # ── PART 2: THE CREDIBILITY DROP (expert term, only if 2nd finding exists) ──
                         if len(_sorted) >= 2:
                             a2 = _sorted[1]
                             m2 = a2.get('metric', '')
                             t2 = a2.get('title', '')
                             et2 = a2.get('expert_term', '')
                             if m2 and et2:
-                                _second = [
-                                    f" {et2} ({m2}) also stood out.",
-                                    f" On top of that, {et2} at {m2} is another area worth looking at.",
-                                    f" There's also {et2} sitting at {m2}.",
+                                # This is the ONE tech term in the email
+                                _cred = [
+                                    f" There's also some {et2} ({m2}) worth looking at.",
+                                    f" On top of that, {et2} at {m2} is another thing I'd flag.",
+                                    f" I also noticed {et2} sitting at {m2}.",
                                     f" Plus, {et2} ({m2}) could use some attention.",
-                                    f" I also flagged {et2} at {m2} as worth addressing.",
                                 ]
-                                observation_str += _random.choice(_second)
+                                observation_str += _random.choice(_cred)
                             elif m2:
-                                observation_str += f" {t2} ({m2}) is another thing that stood out."
+                                observation_str += f" {t2} ({m2}) is also worth a look."
                             elif t2:
                                 observation_str += f" {t2} is also something worth looking at."
                     elif clean_icebreaker and clean_icebreaker.strip():
