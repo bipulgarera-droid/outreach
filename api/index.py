@@ -2413,7 +2413,24 @@ def create_sequences():
                     bodies_raw = [t['body_template'] for t in templates_data]
                     company_context = enrichment_data.get('company_context')
                     audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
+
+                    # Strip the compliment/icebreaker line from EMAIL_1 BEFORE
+                    # sending to the paraphraser so the AI cannot duplicate it.
+                    # The paraphrase prompt already instructs the model to write
+                    # a fresh observation from audit data (or context), so keeping
+                    # the old compliment in the input only causes duplication.
+                    if bodies_raw:
+                        _first = bodies_raw[0]
+                        # Split into paragraphs (double newline separated)
+                        _paras = _re.split(r'\n\s*\n', _first)
+                        if len(_paras) >= 3:
+                            # Para 0 = greeting, Para 1 = compliment/icebreaker, Para 2+ = rest
+                            # Remove paragraph 1 (the compliment) so the model writes its own
+                            _paras_clean = [_paras[0]] + _paras[2:]
+                            bodies_raw[0] = '\n\n'.join(_paras_clean)
+
                     bodies_para = paraphrase_texts_batch(
+
                         bodies_raw, 
                         context=variables, 
                         company_context=company_context, 
