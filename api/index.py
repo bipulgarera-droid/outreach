@@ -2440,12 +2440,16 @@ def create_sequences():
                             t2 = a2.get('title', '')
                             et2 = a2.get('expert_term', '')
                             if m2 and et2:
+                                # Only show the metric if it contains a number (avoids "unused JS (unused JS detected)")
+                                has_number = any(char.isdigit() for char in m2)
+                                display_m2 = f" ({m2})" if has_number else ""
+                                
                                 # This is the ONE tech term in the email
                                 _cred = [
-                                    f" There's also some {et2} ({m2}) worth looking at.",
-                                    f" On top of that, {et2} at {m2} is another thing I'd flag.",
-                                    f" I also noticed {et2} sitting at {m2}.",
-                                    f" Plus, {et2} ({m2}) could use some attention.",
+                                    f" There's also some {et2}{display_m2} worth looking at.",
+                                    f" On top of that, {et2}{display_m2} is another thing I'd flag.",
+                                    f" I also noticed {et2}{display_m2}.",
+                                    f" Plus, {et2}{display_m2} could use some attention.",
                                 ]
                                 observation_str += _random.choice(_cred)
                             elif m2:
