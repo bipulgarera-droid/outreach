@@ -2406,39 +2406,34 @@ def create_sequences():
                         # Sort by score (highest impact first), then pick top 2
                         _sorted = sorted(audit_findings, key=lambda x: x.get('score', 0), reverse=True)
 
-                        # ── PART 1: THE HOOK (relatable pain, NO jargon) ──
+                        # ── PART 1: THE HOOK (relatable pain, NO jargon, NO em dashes) ──
                         a1 = _sorted[0]
-                        m1 = a1.get('metric', '')
                         t1 = a1.get('title', '')
                         d1 = a1.get('description', '')
 
+                        # Short opener that ends naturally, then description flows as its own sentence
                         _openers = [
-                            "I was looking at your website and noticed",
-                            "I checked out your site and saw",
-                            "I took a look at your website and found",
-                            "I was going through your website and noticed",
-                            "I ran a quick check on your site and spotted",
-                            "I had a look at your website and picked up on",
-                            "I was browsing your site and came across",
+                            "I took a quick look at your website.",
+                            "I was checking out your site earlier.",
+                            "I had a look at your website the other day.",
+                            "I was browsing your site and ran a quick check.",
+                            "I checked out your website recently.",
+                            "I was looking at your site and noticed something.",
+                            "I had a quick look at your website.",
                         ]
                         _opener = _random.choice(_openers)
 
-                        if m1 and d1:
-                            # Best case: metric + description consequence
-                            _hooks = [
-                                f"{_opener} {m1} — {d1.lower()}",
-                                f"{_opener} it's taking around {m1} — {d1.split(',')[-1].strip().lower() if ',' in d1 else d1.lower()}",
-                                f"{_opener} {m1}, and {d1.split(',')[-1].strip().lower() if ',' in d1 else d1.lower()}",
-                            ]
-                            observation_str = _random.choice(_hooks)
-                        elif m1:
-                            observation_str = f"{_opener} {m1}, which is likely costing you visitors."
-                        elif d1:
-                            observation_str = f"{_opener} {d1.lower()}"
+                        if d1:
+                            # The description is already well-written with metrics baked in
+                            # Just transform "The site..." → "It..." so it flows naturally
+                            _desc = d1
+                            if _desc.lower().startswith('the site '):
+                                _desc = 'It ' + _desc[9:]
+                            observation_str = f"{_opener} {_desc}"
                         else:
-                            observation_str = f"{_opener} some {t1} issues that could be affecting your conversions."
+                            observation_str = f"{_opener} There are some {t1} issues that could be affecting your conversions."
 
-                        # ── PART 2: THE CREDIBILITY DROP (expert term, only if 2nd finding exists) ──
+                        # ── PART 2: THE CREDIBILITY DROP (ONE expert term, only if 2nd finding exists) ──
                         if len(_sorted) >= 2:
                             a2 = _sorted[1]
                             m2 = a2.get('metric', '')
