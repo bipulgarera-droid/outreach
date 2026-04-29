@@ -2032,12 +2032,12 @@ The following are the top technical failures found on their website:
             
             system += f"""
 EMAIL_1 RULES (TECHNICAL AUDIT):
-The observation paragraph (paragraph 2, right after the greeting) has ALREADY been written for you using the audit data above. It is ALREADY in the template text you will receive.
+The observation paragraph (paragraph 2, right after the greeting) contains a DRAFT written using the audit data above. It is ALREADY in the template text you will receive.
 Follow this strict structure:
 
 1. The Greeting: Copy the EXACT greeting line from the original template. Do NOT change it, do NOT add variables that aren't already in the template. If the template says "Hey," then output exactly "Hey," on its own line. If the template says "Hi {{first_name}}," then output exactly "Hi {{first_name}},". NEVER invent or hallucinate variables like {firstname} or {{prospectfirstname}} that do not exist in the original template.
 
-2. The Observation (paragraph 2): This paragraph has already been written with real audit data. You MUST keep it but lightly rephrase it for uniqueness. You may change the opening phrase (e.g., change "I was looking at your website and noticed" to "I checked out your site and saw" or "I took a look at your website and found"). Keep ALL metrics, numbers, and business consequences EXACTLY the same. Do NOT remove this paragraph. Do NOT replace it with something generic.
+2. The Observation (paragraph 2): This paragraph contains a draft technical observation. You SHOULD rephrase and polish it to sound more natural and consultative — like a real expert casually pointing something out. You MUST keep ALL metrics, numbers, and technical terms (like "Largest Contentful Paint", "main-thread blocking", "Core Web Vitals") EXACTLY as they appear. You may rearrange the sentence, change the opening phrase, adjust the business consequence phrasing, or make it flow better. But NEVER remove the paragraph, NEVER strip out the expert terminology, and NEVER replace it with something generic. The final result should read like a consultant who actually ran their audit, not a robot.
 
 3. The Rest of the Email: Do a very light paraphrase (~20% word changes) of the remaining template paragraphs (offer, CTA, sign-off). Keep the sentence structure mostly the same but swap a few words with natural synonyms for spam filter uniqueness. NEVER change meaning, metrics, or intent. KEEP EVERY SINGLE LINE BREAK from the original template intact. Each original paragraph must remain its own separate paragraph.
 
@@ -2400,66 +2400,66 @@ def create_sequences():
                     observation_str = ''
                     if audit_findings and len(audit_findings) >= 1:
                         # AUDIT DATA PATH: Build from technical findings
-                        # Randomize ALL sentence parts for natural variety
+                        # Sort by score (highest impact first), then pick top 2
+                        _sorted = sorted(audit_findings, key=lambda x: x.get('score', 0), reverse=True)
+                        a1 = _sorted[0]
+                        m1 = a1.get('metric', '')
+                        t1 = a1.get('title', '')
+                        et1 = a1.get('expert_term', '')
+                        d1 = a1.get('description', '')
+
+                        # Varied openers
                         _openers = [
                             "I was looking at your website and noticed",
                             "I checked out your site and saw",
                             "I took a look at your website and found",
                             "I was going through your website and noticed",
-                            "I ran a quick audit on your site and spotted",
+                            "I ran a quick check on your site and spotted",
                             "I had a look at your website and picked up on",
                             "I was browsing your site and came across",
-                            "I glanced at your website and caught",
-                        ]
-                        _consequences = [
-                            "which often means visitors leave before the page finishes loading",
-                            "which can really hurt your bounce rate and cost you potential clients",
-                            "that's likely causing a lot of visitors to drop off before they even see your content",
-                            "which usually leads to people bouncing before they get a chance to engage",
-                            "and that kind of delay tends to push potential customers away",
-                            "which is probably turning away visitors before they even interact with your site",
-                            "and most visitors won't wait around that long before leaving",
-                            "which typically means you're losing traffic before they see what you offer",
-                        ]
-                        _second_connectors_metric = [
-                            "{t2} ({m2}) could also use some attention.",
-                            "On top of that, {t2} clocked in at {m2}.",
-                            "There's also {t2} sitting at {m2} which stood out.",
-                            "{t2} at {m2} is another thing worth looking at.",
-                            "I also noticed {t2} at {m2}, which adds up.",
-                            "Plus, {t2} ({m2}) is something that could be improved.",
-                        ]
-                        _second_connectors_title = [
-                            "{t2} could also use some attention.",
-                            "There were also some {t2} issues worth addressing.",
-                            "{t2} is another area that stood out.",
-                            "I also flagged {t2} as something to look into.",
                         ]
                         _opener = _random.choice(_openers)
-                        _consequence = _random.choice(_consequences)
-                        a1 = audit_findings[0]
-                        m1 = a1.get('metric', '')
-                        t1 = a1.get('title', '')
-                        if m1:
-                            observation_str = f"{_opener} {m1}, {_consequence}."
-                        else:
-                            _no_metric_patterns = [
-                                f"{_opener} some {t1} issues that could be affecting your conversions.",
-                                f"{_opener} a few {t1} problems that might be holding your site back.",
-                                f"{_opener} some {t1} concerns that could be costing you visitors.",
-                                f"{_opener} {t1} issues that are probably impacting your performance.",
+
+                        # Build primary finding sentence using expert_term + metric + description
+                        if m1 and et1:
+                            # Best case: expert term + metric → sounds consultative
+                            # Use description to extract a natural consequence
+                            _consequences_expert = [
+                                f"your {et1} is sitting at {m1} — {d1.split(',')[-1].strip() if ',' in d1 else d1.lower()}",
+                                f"a {et1} issue ({m1}) — {d1.lower()}",
+                                f"your {et1} is at {m1}, which is way above the recommended threshold",
+                                f"{m1} on {et1} — {d1.split(',')[-1].strip() if ',' in d1 else 'that can seriously impact conversions'}",
                             ]
-                            observation_str = _random.choice(_no_metric_patterns)
-                        if len(audit_findings) >= 2:
-                            a2 = audit_findings[1]
+                            _primary = _random.choice(_consequences_expert)
+                            observation_str = f"{_opener} {_primary}."
+                        elif m1:
+                            # Has metric but no expert term
+                            observation_str = f"{_opener} {m1} — {d1.lower()}"
+                        elif et1:
+                            # Has expert term but no metric
+                            observation_str = f"{_opener} some {et1} issues — {d1.lower()}"
+                        else:
+                            observation_str = f"{_opener} some {t1} issues that could be affecting your conversions."
+
+                        # Add second finding if available
+                        if len(_sorted) >= 2:
+                            a2 = _sorted[1]
                             m2 = a2.get('metric', '')
                             t2 = a2.get('title', '')
-                            if m2:
-                                _conn = _random.choice(_second_connectors_metric).format(t2=t2, m2=m2)
-                                observation_str += f" {_conn}"
+                            et2 = a2.get('expert_term', '')
+                            if m2 and et2:
+                                _second = [
+                                    f" {et2} ({m2}) also stood out.",
+                                    f" On top of that, {et2} at {m2} is another area worth looking at.",
+                                    f" There's also {et2} sitting at {m2}.",
+                                    f" Plus, {et2} ({m2}) could use some attention.",
+                                    f" I also flagged {et2} at {m2} as worth addressing.",
+                                ]
+                                observation_str += _random.choice(_second)
+                            elif m2:
+                                observation_str += f" {t2} ({m2}) is another thing that stood out."
                             elif t2:
-                                _conn = _random.choice(_second_connectors_title).format(t2=t2)
-                                observation_str += f" {_conn}"
+                                observation_str += f" {t2} is also something worth looking at."
                     elif clean_icebreaker and clean_icebreaker.strip():
                         # SITE DATA PATH: Use the pre-generated icebreaker
                         observation_str = clean_icebreaker
