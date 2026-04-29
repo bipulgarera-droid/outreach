@@ -2019,7 +2019,7 @@ For EMAIL_1 ONLY, you MUST follow this strict framework perfectly:
 """
         if audit_findings and len(audit_findings) > 0:
             system += f"""
-TECHNICAL AUDIT CONTEXT (HIGHEST PRIORITY):
+TECHNICAL AUDIT CONTEXT (for reference):
 The following are the top technical failures found on their website:
 """
             for audit in audit_findings:
@@ -2031,13 +2031,13 @@ The following are the top technical failures found on their website:
                 system += line + "\n"
             
             system += f"""
-EMAIL_1 RULES (TECHNICAL AUDIT OVERRIDE):
-Instead of a generic compliment, you MUST use the technical failures listed above to craft a consultative, personalized observation. 
+EMAIL_1 RULES (TECHNICAL AUDIT):
+The observation paragraph (paragraph 2, right after the greeting) has ALREADY been written for you using the audit data above. It is ALREADY in the template text you will receive.
 Follow this strict structure:
 
 1. The Greeting: Copy the EXACT greeting line from the original template. Do NOT change it, do NOT add variables that aren't already in the template. If the template says "Hey," then output exactly "Hey," on its own line. If the template says "Hi {{first_name}}," then output exactly "Hi {{first_name}},". NEVER invent or hallucinate variables like {firstname} or {{prospectfirstname}} that do not exist in the original template.
 
-2. The Observation (NEXT paragraph, after a double line break): The template contains a marker line "[WRITE YOUR OBSERVATION HERE]". You MUST completely replace that entire marker with your new opening. NEVER output the text "[WRITE YOUR OBSERVATION HERE]" literally. Write a new opening that starts with a slightly paraphrased variation of "I just checked out your website and noticed..." (vary this phrasing for each contact — e.g., "I was looking at your site and saw...", "I took a look at your website and found...", etc.). Then lead with the biggest number from the [METRIC] tags (e.g., "it's taking around 5.8 seconds to load on mobile") and end with a quick business consequence using a comma (e.g., ", which often means visitors leave before the page finishes loading"). If mentioning a second issue, add ONE short follow-up sentence. NEVER pad with filler words. Be direct. Never say vague things like "takes a while" — always use exact numbers.
+2. The Observation (paragraph 2): This paragraph has already been written with real audit data. You MUST keep it but lightly rephrase it for uniqueness. You may change the opening phrase (e.g., change "I was looking at your website and noticed" to "I checked out your site and saw" or "I took a look at your website and found"). Keep ALL metrics, numbers, and business consequences EXACTLY the same. Do NOT remove this paragraph. Do NOT replace it with something generic.
 
 3. The Rest of the Email: Do a very light paraphrase (~20% word changes) of the remaining template paragraphs (offer, CTA, sign-off). Keep the sentence structure mostly the same but swap a few words with natural synonyms for spam filter uniqueness. NEVER change meaning, metrics, or intent. KEEP EVERY SINGLE LINE BREAK from the original template intact. Each original paragraph must remain its own separate paragraph.
 
@@ -2068,30 +2068,20 @@ If the niche and location are generic (like 'business' or 'their area'), you MUS
         if not audit_findings or len(audit_findings) == 0:
             system += """
 EMAIL_1 RULES:
-Use the provided context (or fallback) to craft a personalized 1-sentence opening observation, seamlessly integrating it with the original offer. Follow this flow strictly:
+The observation/icebreaker paragraph (paragraph 2, right after the greeting) has ALREADY been written for you. It is ALREADY in the template text you will receive.
+Follow this flow strictly:
 """
-            if company_info and not company_context:
-                system += f"""IMPORTANT RAW TEXT GUIDANCE:
-Read through the raw website text. Find ONE highly specific, unique, or personal detail (such as a personal hobby, a hometown, or a unique founding story) OR an impressive specific business offering (like specific featured properties, a unique niche service, or an impressive portfolio piece). Just don't be boring!
-Do NOT hallucinate. If the text is absolutely too generic to pull any personal details or specific featured offerings, ONLY THEN fallback to a simple observation based on their niche ({c_niche}) and location ({c_loc}), or their company name ({c_name}).
-Example fallback: "Love the {c_niche} work you are doing in {c_loc}." (Keep this entirely on one single line, NO newlines inside the sentence).
-"""
-            
             if personalization_prompt:
                 system += f"""IMPORTANT: USER PERSONALIZATION OVERRIDE: 
 Focus the observation SPECIFICALLY on: "{personalization_prompt}". 
 If details matching "{personalization_prompt}" are explicitly present in the COMPANY SCRAPED CONTEXT above, you MUST use them.
 If that specific data is absent from the company context, DO NOT MAKE ANY ASSUMPTIONS and do not invent it. Instead, fall back to the closest actual fact present in the context.
 """
-            else:
-                system += """IMPORTANT: Do NOT try to connect their website to your service or offer. Keep it simple. Look deep into their text to find a highly personal detail (hobby/hometown) or an impressive specific business offering (like a featured property/service), and compliment it casually. Do NOT just state their city or generic niche if they have richer details available.
-"""
             system += """
 1. The Greeting: Keep the exact original greeting from the template perfectly intact. Do NOT invent or alter variables. If the template uses {{first_name}}, leave it exactly as {{first_name}}. If the template has NO variable and just says "Hey,", keep it exactly as "Hey,"! DO NOT output fake variables like {{prospectfirstname}}.
-2. The Compliment (Line 2): The template contains a marker line "[WRITE YOUR OBSERVATION HERE]". You MUST completely replace that entire marker with a casual conversational observation based on their website or fallback data, followed by a brief compliment. NEVER output the text "[WRITE YOUR OBSERVATION HERE]" literally. Do NOT include their website URL. Example structures you SHOULD emulate to sound human: "Saw you're a [Hometown] native who moved to [City], pretty cool stuff." OR "Saw your featured properties, really impressive listings." OR "Saw your background in [Specific Field] before doing [Current Business], really stands out."
-3. The Transition: Immediately following the compliment, add a short, casual segue to bridge into the template logically, such as "Wanted to run something by you."
-4. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, your new compliment paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
-5. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
+2. The Compliment (paragraph 2): This paragraph has already been written as a personalized observation. You MUST keep it but lightly rephrase it for uniqueness. Keep the core meaning and any specific details exactly the same. Do NOT remove this paragraph. Do NOT replace it with something generic.
+3. CRITICAL FORMATTING: You MUST use double line breaks (\n\n) to separate the greeting, the observation paragraph, and the rest of the email. DO NOT merge the entire email into one giant block of text!
+4. The Rest of the Email: Do a very light paraphrase of the original template's core offer and CTA. Keep the sentence structure and phrasing mostly the same, but replace a few key words with natural synonyms to ensure it is unique for spam filters. NEVER change the meaning, metrics, or intent.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
@@ -2405,31 +2395,55 @@ def create_sequences():
 
                     audit_findings = enrichment_data.get('lighthouse_audit', {}).get('top_audits', [])
 
-                    # Build a fallback audit_data string from findings
-                    # so {{audit_data}} can be substituted if the AI doesn't inline it
-                    audit_data_str = ''
+                    # ── Build the observation string from the BEST available data ──
+                    import random as _random
+                    observation_str = ''
                     if audit_findings and len(audit_findings) >= 1:
+                        # AUDIT DATA PATH: Build from technical findings
+                        _openers = [
+                            "I was looking at your website and noticed",
+                            "I checked out your site and saw",
+                            "I took a look at your website and found",
+                            "I was going through your website and noticed",
+                        ]
+                        _opener = _random.choice(_openers)
                         a1 = audit_findings[0]
                         m1 = a1.get('metric', '')
                         t1 = a1.get('title', '')
                         if m1:
-                            audit_data_str = f"I was looking at your website and noticed {m1}, which often means visitors leave before the page finishes loading."
+                            observation_str = f"{_opener} {m1}, which often means visitors leave before the page finishes loading."
                         else:
-                            audit_data_str = f"I took a look at your website and noticed some {t1} issues that could be affecting your conversions."
+                            observation_str = f"{_opener} some {t1} issues that could be affecting your conversions."
                         if len(audit_findings) >= 2:
                             a2 = audit_findings[1]
                             m2 = a2.get('metric', '')
                             t2 = a2.get('title', '')
                             if m2:
-                                audit_data_str += f" {t2} ({m2}) could also use some attention."
+                                observation_str += f" {t2} ({m2}) could also use some attention."
                             elif t2:
-                                audit_data_str += f" {t2} could also use some attention."
+                                observation_str += f" {t2} could also use some attention."
+                    elif clean_icebreaker and clean_icebreaker.strip():
+                        # SITE DATA PATH: Use the pre-generated icebreaker
+                        observation_str = clean_icebreaker
+                    else:
+                        # FALLBACK: Use niche/location/company name
+                        _company = variables.get('company', 'your company')
+                        _niche = variables.get('niche', '')
+                        _location = variables.get('location', '')
+                        if _niche and _location and _niche.lower() not in ['business', ''] and _location.lower() not in ['their area', '']:
+                            observation_str = f"Love the {_niche} work you are doing in {_location}."
+                        elif _company and _company.lower() not in ['your company', 'unknown', '']:
+                            observation_str = f"Love the work you guys are doing at {_company}."
+                        else:
+                            observation_str = "Love what you guys are building."
+
+                    logger.info(f"  💡 Observation for {contact.get('id')}: {observation_str[:80]}...")
 
                     variables.update({
                         'review_count': str(rc),
                         'reviewcount': str(rc),
                         'rating': str(rt),
-                        'audit_data': audit_data_str,
+                        'audit_data': observation_str,
                     })
 
                     # ── BATCH PARAPHRASE: all template bodies in ONE Flash call ──
@@ -2437,19 +2451,17 @@ def create_sequences():
                     company_context = enrichment_data.get('company_context')
                     logger.info(f"  📋 Contact {contact.get('id')}: audit_findings={len(audit_findings)} items, has_lighthouse={bool(enrichment_data.get('lighthouse_audit'))}")
 
-                    # Replace the compliment/icebreaker line in EMAIL_1 with a marker
-                    # so the AI knows exactly WHERE to write its observation.
-                    # The marker preserves paragraph structure (unlike stripping which
-                    # removes the slot entirely, causing the AI to skip it).
+                    # Inject the real observation into EMAIL_1's paragraph 2
+                    # so the AI only needs to paraphrase it (not generate it).
                     if bodies_raw:
                         _first = bodies_raw[0]
                         # Split into paragraphs (double newline separated)
                         _paras = _re.split(r'\n\s*\n', _first)
-                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (replacing para 1 with marker if >=3)")
+                        logger.info(f"  📝 Template paragraphs: {len(_paras)} (injecting observation into para 1 if >=3)")
                         if len(_paras) >= 3:
                             # Para 0 = greeting, Para 1 = compliment/icebreaker/{{audit_data}}/{{icebreaker}}
-                            # Replace paragraph 1 with marker so AI writes its observation here
-                            _paras[1] = '[WRITE YOUR OBSERVATION HERE]'
+                            # Replace paragraph 1 with the ACTUAL observation text
+                            _paras[1] = observation_str
                             bodies_raw[0] = '\n\n'.join(_paras)
 
                     bodies_para = paraphrase_texts_batch(
@@ -2488,10 +2500,6 @@ def create_sequences():
                                 subject = pattern.sub(val_str, subject)
                                 body = pattern.sub(val_str, body)
 
-                            # Safety net: if the AI failed to replace the marker, strip it
-                            body = body.replace('[WRITE YOUR OBSERVATION HERE]', '').strip()
-                            # Clean up any double blank lines left by marker removal
-                            body = _re.sub(r'\n{3,}', '\n\n', body)
 
                             if existing:
                                 if existing['status'] == 'pending':
