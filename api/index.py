@@ -2400,28 +2400,66 @@ def create_sequences():
                     observation_str = ''
                     if audit_findings and len(audit_findings) >= 1:
                         # AUDIT DATA PATH: Build from technical findings
+                        # Randomize ALL sentence parts for natural variety
                         _openers = [
                             "I was looking at your website and noticed",
                             "I checked out your site and saw",
                             "I took a look at your website and found",
                             "I was going through your website and noticed",
+                            "I ran a quick audit on your site and spotted",
+                            "I had a look at your website and picked up on",
+                            "I was browsing your site and came across",
+                            "I glanced at your website and caught",
+                        ]
+                        _consequences = [
+                            "which often means visitors leave before the page finishes loading",
+                            "which can really hurt your bounce rate and cost you potential clients",
+                            "that's likely causing a lot of visitors to drop off before they even see your content",
+                            "which usually leads to people bouncing before they get a chance to engage",
+                            "and that kind of delay tends to push potential customers away",
+                            "which is probably turning away visitors before they even interact with your site",
+                            "and most visitors won't wait around that long before leaving",
+                            "which typically means you're losing traffic before they see what you offer",
+                        ]
+                        _second_connectors_metric = [
+                            "{t2} ({m2}) could also use some attention.",
+                            "On top of that, {t2} clocked in at {m2}.",
+                            "There's also {t2} sitting at {m2} which stood out.",
+                            "{t2} at {m2} is another thing worth looking at.",
+                            "I also noticed {t2} at {m2}, which adds up.",
+                            "Plus, {t2} ({m2}) is something that could be improved.",
+                        ]
+                        _second_connectors_title = [
+                            "{t2} could also use some attention.",
+                            "There were also some {t2} issues worth addressing.",
+                            "{t2} is another area that stood out.",
+                            "I also flagged {t2} as something to look into.",
                         ]
                         _opener = _random.choice(_openers)
+                        _consequence = _random.choice(_consequences)
                         a1 = audit_findings[0]
                         m1 = a1.get('metric', '')
                         t1 = a1.get('title', '')
                         if m1:
-                            observation_str = f"{_opener} {m1}, which often means visitors leave before the page finishes loading."
+                            observation_str = f"{_opener} {m1}, {_consequence}."
                         else:
-                            observation_str = f"{_opener} some {t1} issues that could be affecting your conversions."
+                            _no_metric_patterns = [
+                                f"{_opener} some {t1} issues that could be affecting your conversions.",
+                                f"{_opener} a few {t1} problems that might be holding your site back.",
+                                f"{_opener} some {t1} concerns that could be costing you visitors.",
+                                f"{_opener} {t1} issues that are probably impacting your performance.",
+                            ]
+                            observation_str = _random.choice(_no_metric_patterns)
                         if len(audit_findings) >= 2:
                             a2 = audit_findings[1]
                             m2 = a2.get('metric', '')
                             t2 = a2.get('title', '')
                             if m2:
-                                observation_str += f" {t2} ({m2}) could also use some attention."
+                                _conn = _random.choice(_second_connectors_metric).format(t2=t2, m2=m2)
+                                observation_str += f" {_conn}"
                             elif t2:
-                                observation_str += f" {t2} could also use some attention."
+                                _conn = _random.choice(_second_connectors_title).format(t2=t2)
+                                observation_str += f" {_conn}"
                     elif clean_icebreaker and clean_icebreaker.strip():
                         # SITE DATA PATH: Use the pre-generated icebreaker
                         observation_str = clean_icebreaker
