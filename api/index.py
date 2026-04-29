@@ -1703,11 +1703,26 @@ def generate_template():
 
 @app.route('/api/templates/<int:template_id>', methods=['DELETE'])
 def delete_template(template_id):
-    """Delete an email template."""
+    """Delete an email template and safely handle referencing sequence steps."""
     try:
+        # First, detach any 'sent' or 'replied' steps so we keep their history but remove the FK constraint
+        try:
+            supabase.table('sequence_steps').update({'template_id': None}).in_('status', ['sent', 'replied']).eq('template_id', template_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to nullify sent steps for template {template_id}: {e}")
+            
+        # Second, delete any 'pending' steps that were scheduled to use this template
+        try:
+            supabase.table('sequence_steps').delete().eq('status', 'pending').eq('template_id', template_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete pending steps for template {template_id}: {e}")
+
+        # Finally, delete the template itself
         supabase.table('email_templates').delete().eq('id', template_id).execute()
+        
         return jsonify({'message': 'Template deleted successfully'})
     except Exception as e:
+        logger.error(f"Error deleting template {template_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
